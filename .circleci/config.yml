@@ -37,12 +37,12 @@ jobs:
           paths:
             - operator/target/operator-1.0-SNAPSHOT.jar
 
-  dockerize:
-    steps:
-      - checkout
-
-      - setup_remote_docker
-
-      - run:
-          name: Create Docker image
-          command: ./buildenv/operator/build
+#  dockerize:
+#    steps:
+#      - checkout
+#
+#      - setup_remote_docker
+#
+#      - run:
+#          name: Create Docker image
+#          command: ./buildenv/operator/build
