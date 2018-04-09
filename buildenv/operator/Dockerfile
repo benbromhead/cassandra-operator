@@ -1,6 +1,6 @@
 FROM debian:stretch
 
-COPY dagi /usr/local/bin/
+COPY buildenv/operator/dagi /usr/local/bin/
 
 RUN dagi locales gnupg2 dirmngr lsb-release curl \
     openjdk-8-jre-headless
