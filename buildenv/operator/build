@@ -9,6 +9,6 @@ set -o pipefail
 
 GIT_SHA=`git rev-parse --short HEAD || echo "GitNotFound"`
 
-docker build --tag "${IMAGE}" -f hack/build/operator/Dockerfile . 1>/dev/null
+docker build --tag "${IMAGE}" -f buildenv/operator/Dockerfile . 1>/dev/null
 gcloud docker -a
 docker push "${IMAGE}" 1>/dev/null
