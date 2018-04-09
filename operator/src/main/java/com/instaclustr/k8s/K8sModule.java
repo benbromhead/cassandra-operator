@@ -18,7 +18,7 @@ public class K8sModule extends AbstractModule {
     public ApiClient provideApiClient() {
         ApiClient apiClient;
         try {
-            if(externalK8sConfig != null) {
+            if (externalK8sConfig != null) {
                 //TODO: make this externally configurable
                 apiClient = Config.fromConfig(externalK8sConfig);
             } else {
