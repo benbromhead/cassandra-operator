@@ -1,0 +1,60 @@
+# Java Maven CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-java/ for more details
+#
+version: 2
+jobs:
+  build:
+    docker:
+      # specify the version you desire here
+      - image: gcr.io/cassandra-operator/jdk8-gcloud-sdk:latest
+        auth:
+          username: __json_key
+          password: $GOOGLE_AUTH
+    
+    working_directory: ~/cassandra-operator
+
+    environment:
+      # Customize the JVM maximum heap limit
+      MAVEN_OPTS: -Xmx3200m
+    
+    steps:
+      - checkout
+
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "operator/pom.xml" }}
+          # fallback to using the latest cache if no exact match is found
+          - v1-dependencies-
+
+      - run: mvn dependency:go-offline
+      - run:
+          name: Dump Google Cloud Credentials to file
+          command: echo ${GOOGLE_AUTH} > ${HOME}/gcp-key.json
+      - run:
+          name: Setup Google Cloud
+          command: gcloud auth activate-service-account --key-file ${HOME}/gcp-key.json && gcloud --quiet config set project ${GOOGLE_PROJECT_ID} && gcloud --quiet config set compute/zone ${GOOGLE_COMPUTE_ZONE}
+
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-dependencies-{{ checksum "operator/pom.xml" }}
+        
+      # run tests!
+      - run: mvn package
+
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - operator/target/operator-1.0-SNAPSHOT.jar
+
+  dockerize:
+    steps:
+      - checkout
+
+      - setup_remote_docker
+
+      - run:
+          name: Create Docker image
+          command: ./buildenv/operator/build
