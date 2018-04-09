@@ -29,8 +29,10 @@ jobs:
           name: Setup Google Cloud
           command: gcloud auth activate-service-account --key-file ${HOME}/gcp-key.json && gcloud --quiet config set project ${GOOGLE_PROJECT_ID} && gcloud --quiet config set compute/zone ${GOOGLE_COMPUTE_ZONE}
         
-      # run tests!
-      - run: mvn package
+      # run tests! at some point
+      - run: mvn -q package
+
+      - setup_remote_docker
 
       - run:
           name: Create Docker image
