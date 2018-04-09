@@ -32,17 +32,6 @@ jobs:
       # run tests!
       - run: mvn package
 
-      - persist_to_workspace:
-          root: /tmp
-          paths:
-            - operator/target/operator-1.0-SNAPSHOT.jar
-
-#  dockerize:
-#    steps:
-#      - checkout
-#
-#      - setup_remote_docker
-#
-#      - run:
-#          name: Create Docker image
-#          command: ./buildenv/operator/build
+      - run:
+          name: Create Docker image
+          command: ./buildenv/operator/build
