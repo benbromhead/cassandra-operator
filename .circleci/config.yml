@@ -9,7 +9,7 @@ jobs:
       # specify the version you desire here
       - image: gcr.io/cassandra-operator/jdk8-gcloud-sdk:latest
         auth:
-          username: __json_key
+          username: _json_key
           password: $GOOGLE_AUTH
     
     working_directory: ~/cassandra-operator
