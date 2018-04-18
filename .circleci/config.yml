@@ -74,11 +74,11 @@ jobs:
       - run:
           name: Run integration tests
           # command: ./test/e2e.sh (run e2e tests via maven/junit)
-          command: kubectl get pods --selector=k8s-app=cassandra-operator | awk 'NR>1{if($3 == "CrashLoopBackOff") {exit 1}}'
+          command: kubectl get pods --selector=k8s-app=cassandra-operator | tee | awk 'NR>1{if($3 == "CrashLoopBackOff") {exit 1}}'
 
       - run:
           name: Cleanup GCP resources
-          command: gcloud --quiet container clusters delete ${K8S_CLUSTER_NAME}
+          command: gcloud --quiet container clusters delete ${K8S_CLUSTER_NAME} --async
           when: always
 workflows:
   version: 2
