@@ -4,8 +4,11 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.ParserProperties;
+import org.kohsuke.args4j.spi.PathOptionHandler;
 
+import javax.annotation.Nullable;
 import java.io.PrintStream;
+import java.nio.file.Path;
 
 public abstract class BaseArguments {
     final String appName;
@@ -63,4 +66,28 @@ public abstract class BaseArguments {
 
     @Option(name="--help", usage = "Show this message.", help = true)
     public boolean showHelp;
+
+
+    @Option(name = "--bs", aliases = {"--blob-storage"}, usage = "Blob storage provider (AWS, AZURE, GCP, FILE)", metaVar = "FILE")
+    public StorageProvider storageProvider;
+
+
+    @Option(name = "--cid", aliases = {"--cluster-id"}, usage = "Cluster ID - normally the cluster name", metaVar = "cluster_name")
+    public String clusterID;
+
+    //TODO: Allow user to override commitlog directory (some environments may allow different disks which better suit commitlog performance
+    @Option(name = "--dd", aliases = {"--data-directory"}, usage = "Base directory that contains the Cassandra data, cache and commitlog directories", metaVar = "/cassandra", handler = PathOptionHandler.class)
+    @Nullable
+    public Path cassandraDirectory;
+
+    //TODO: Allow user to override commitlog directory (some environments may allow different disks which better suit commitlog performance
+    @Option(name = "--cd", aliases = {"--config-directory"}, usage = "Base directory that contains the Cassandra data, cache and commitlog directories", metaVar = "/cassandra", handler = PathOptionHandler.class)
+    @Nullable
+    public Path cassandraConfigDirectory;
+
+
+    @Option(name = "-p", aliases = {"--shared-path"}, usage = "Shared Container path for pod", metaVar = "/", handler = PathOptionHandler.class)
+    @Nullable
+    public Path sharedContainerPath;
+
 }

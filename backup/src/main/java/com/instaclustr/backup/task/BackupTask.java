@@ -10,10 +10,9 @@ import com.instaclustr.backup.jmx.CassandraObjectNames;
 import com.instaclustr.backup.uploader.FilesUploader;
 import com.instaclustr.backup.util.Directories;
 import com.instaclustr.backup.util.GlobalLock;
+import jmx.org.apache.cassandra.two.zero.service.StorageServiceMBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import jmx.org.apache.cassandra.two.zero.service.StorageServiceMBean;
 
 import javax.management.JMX;
 import javax.management.MBeanServerConnection;

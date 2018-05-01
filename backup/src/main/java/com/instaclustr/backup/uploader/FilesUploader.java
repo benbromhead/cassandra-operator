@@ -1,13 +1,9 @@
 package com.instaclustr.backup.uploader;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.google.common.net.MediaType;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.RateLimiter;
-import com.google.inject.Provider;
 import com.instaclustr.backup.CommonBackupArguments;
 import com.instaclustr.backup.task.ManifestEntry;
 import com.instaclustr.backup.util.DataRate;

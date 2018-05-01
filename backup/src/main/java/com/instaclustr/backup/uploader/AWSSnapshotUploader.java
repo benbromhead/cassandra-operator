@@ -7,7 +7,6 @@ import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.*;
 import com.amazonaws.services.s3.transfer.TransferManager;
-import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
 import com.amazonaws.services.s3.transfer.Upload;
 import com.google.common.base.Optional;
 import org.slf4j.Logger;
@@ -30,12 +29,13 @@ public class AWSSnapshotUploader extends SnapshotUploader {
 
     private final Optional<String> kmsId;
 
-    public AWSSnapshotUploader(final String backupID,
+    public AWSSnapshotUploader(final TransferManager transferManager,
+                               final String backupID,
                                final String clusterID,
                                final String backupBucket,
                                final Optional<String> kmsId) {
 
-        this.transferManager = TransferManagerBuilder.defaultTransferManager();
+        this.transferManager = transferManager;
         this.backupID = backupID;
         this.clusterID = clusterID;
         this.backupBucket = backupBucket;

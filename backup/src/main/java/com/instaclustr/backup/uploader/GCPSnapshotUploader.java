@@ -22,11 +22,12 @@ public class GCPSnapshotUploader extends SnapshotUploader{
     private final String bucket;
 
     @Inject
-    public GCPSnapshotUploader(final String backupID,
+    public GCPSnapshotUploader(final Storage storage,
+                                final String backupID,
                                final String clusterId,
                                final String bucket) {
         this.backupID = clusterId + "/" + backupID;
-        this.storage = StorageOptions.getDefaultInstance().getService();
+        this.storage = storage;
         this.bucket = bucket;
     }
 

@@ -1,5 +1,7 @@
 package com.instaclustr.backup;
 
+import com.google.common.collect.Multimap;
+import com.instaclustr.backup.util.MultimapOptionHandler;
 import org.kohsuke.args4j.Option;
 
 import javax.annotation.Nullable;
@@ -31,9 +33,9 @@ public class RestoreArguments extends BaseArguments {
     @Option(name = "-s", aliases = {"--snapshot-tag"}, metaVar = "tag name", usage = "Snapshot to download and restore.", required = true)
     public String snapshotTag;
 
-    @Option(name="-kt", aliases = "--keyspace-tables", metaVar = "name", usage = "Comma separated list of tables to restore. Must include keyspace name in the format <keyspace.table>")
+    @Option(name="-kt", aliases = "--keyspace-tables", metaVar = "name", usage = "Comma separated list of tables to restore. Must include keyspace name in the format <keyspace.table>", handler = MultimapOptionHandler.class)
     @Nullable
-    public String keyspaceTables;
+    public Multimap<String, String> keyspaceTables;
 
     @Option(name = "-ts", aliases = {"--timestamp-start"}, metaVar = "Milliseconds since epoch", usage = "When the base snapshot was taken. Only relevant if archived commitlogs are available.", required = true)
     public long timestampStart;

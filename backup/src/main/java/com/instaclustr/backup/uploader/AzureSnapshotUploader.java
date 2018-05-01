@@ -1,7 +1,6 @@
 package com.instaclustr.backup.uploader;
 
 import com.microsoft.azure.storage.CloudStorageAccount;
-import com.microsoft.azure.storage.StorageCredentials;
 import com.microsoft.azure.storage.StorageCredentialsAccountAndKey;
 import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.*;
@@ -30,13 +29,12 @@ public class AzureSnapshotUploader extends SnapshotUploader {
     public AzureSnapshotUploader(final String backupID,
                                  final String clusterID,
                                  final String backupBucket,
-                                 final String azureAccountName,
-                                 final String azureAccountKey) throws URISyntaxException, StorageException {
+                                 final CloudBlobClient cloudBlobClient) throws URISyntaxException, StorageException {
         this.backupID = backupID;
         this.clusterID = clusterID;
 
         //Currently just use clusterId (name) as container reference
-        this.blobContainer = new CloudStorageAccount(new StorageCredentialsAccountAndKey(azureAccountName, azureAccountKey)).createCloudBlobClient().getContainerReference(backupBucket);
+        this.blobContainer = cloudBlobClient.getContainerReference(backupBucket);
     }
 
     static class AzureRemoteObjectReference implements RemoteObjectReference {

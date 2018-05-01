@@ -60,7 +60,7 @@ public abstract class Downloader implements AutoCloseable {
                             try {
                                 objectRateLimiter.acquire();
                             } catch (final Exception e) {
-                                logger.warn("Failed to get rate limiter lock for file \"{}\".", remoteObjectReference.getObjectKey(), e);
+                                logger.warn("Failed to getUploader rate limiter lock for file \"{}\".", remoteObjectReference.getObjectKey(), e);
                             }
 
                             this.downloadFile(entry.localFile, remoteObjectReference);
