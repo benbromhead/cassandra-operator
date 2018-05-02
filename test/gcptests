@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 #unit tests
 #TODO: gcp specific tests
 mvn test -Dgroups=gcp

@@ -63,16 +63,16 @@ jobs:
 
           - run:
               name: Dump Pivotal kube config
-              command: echo ${PIVOTAL_KUBECTL} > ${HOME}/.kube/config
+              command: mkdir -p ${HOME}/.kube/ && echo ${PIVOTAL_KUBECTL} > ${HOME}/.kube/config
 
           - run:
               name: Run integration tests
-              command: ./test/pivotaltests.sh
+              command: ./test/pivotaltests
 #              command:
 
           - run:
               name: Cleanup GCP resources
-              command: gcloud --quiet container clusters delete ${K8S_CLUSTER_NAME} --async
+              command: ./test/cleanupk8s
               when: always
   test-joyent:
         docker:
@@ -159,7 +159,7 @@ jobs:
 
       - run:
           name: Run integration tests
-          command: ./test/gcptests (run e2e tests via maven/junit)
+          command: ./test/gcptests
 
       - run:
           name: Cleanup GCP resources
