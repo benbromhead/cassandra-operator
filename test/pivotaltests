@@ -2,7 +2,7 @@
 
 #unit tests
 #TODO: pivotal specific tests
-#mvn test -Dgroups=pivotal
+mvn test -q -Dgroups=pivotal
 
 
 #e2e operator tests

@@ -2,7 +2,7 @@
 
 #unit tests
 #TODO: gcp specific tests
-mvn test -Dgroups=gcp
+mvn test -q -Dgroups=gcp
 
 
 #e2e operator tests

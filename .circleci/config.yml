@@ -72,7 +72,7 @@ jobs:
 
           - run:
               name: Cleanup GCP resources
-              command: ./test/cleanupk8s
+              command: ./test/cleanup
               when: always
   test-joyent:
         docker:
@@ -126,8 +126,7 @@ jobs:
 
         - run:
             name: Run integration tests
-            command: ./test/awstests.sh
-
+            command: ./test/awstests
 
   test-gcp:
     docker:
