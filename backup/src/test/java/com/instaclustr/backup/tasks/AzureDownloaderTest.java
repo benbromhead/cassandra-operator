@@ -1,17 +1,10 @@
 package com.instaclustr.backup.tasks;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-import com.google.inject.Key;
-import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.inject.multibindings.OptionalBinder;
-import com.google.inject.name.Names;
 import com.instaclustr.backup.service.TestHelperService;
 import com.instaclustr.backup.downloader.AzureDownloader;
 import com.instaclustr.backup.downloader.Downloader;
 import com.instaclustr.backup.downloader.RemoteObjectReference;
-import com.instaclustr.backup.uploader.CloudDownloadUploadFactory;
+import com.instaclustr.backup.util.CloudDownloadUploadFactory;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;

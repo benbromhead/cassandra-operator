@@ -3,7 +3,7 @@ package com.instaclustr.backup.tasks;
 import com.google.inject.*;
 import com.instaclustr.backup.CommitLogBackupArguments;
 import com.instaclustr.backup.task.CommitLogBackupTask;
-import com.instaclustr.backup.uploader.CloudDownloadUploadFactory;
+import com.instaclustr.backup.util.CloudDownloadUploadFactory;
 import com.instaclustr.backup.uploader.FilesUploader;
 import com.instaclustr.backup.util.Directories;
 import com.instaclustr.backup.util.GlobalLock;

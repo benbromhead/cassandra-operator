@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Test(groups = {"gcp", "all"})
 public class GCPDownloaderTest {
     private TestHelperService testHelperService = new TestHelperService();
 
@@ -35,7 +36,7 @@ public class GCPDownloaderTest {
 
     private final org.slf4j.Logger log = LoggerFactory.getLogger(GCPDownloaderTest.class);
 
-    // This test case depends upon a GCP cluster having been provisioned
+    // TODO: Change test to not depend on Instaclustr service
     // Test Preprod cluster
     private final String nodeId = "29685ff7-53d5-4990-a6ac-898dc48e472f";
     private final String clusterDataCentreId = "a297edee-3a5e-4d70-a9c0-4d7f0e9a7a60";
@@ -45,17 +46,10 @@ public class GCPDownloaderTest {
     private final String restoreFromNodeId = "29685ff7-53d5-4990-a6ac-898dc48e472f";
     private final String restoreFromCdcId = "a297edee-3a5e-4d70-a9c0-4d7f0e9a7a60";
 
-    final String instaclustrKey = "XXXXXXXXXXXXXX";
-
     @BeforeClass(alwaysRun=true)
     public void setup() throws IOException, URISyntaxException {
         testHelperService.setupTempDirectories(tempDirs);
-
-        storage = StorageOptions.newBuilder()
-            .setProjectId("instaclustr-dev")
-            .setAuthCredentials(AuthCredentials.createForJson(new ByteArrayInputStream(instaclustrKey.getBytes()))).build().getService();
-
-
+        storage = StorageOptions.getDefaultInstance().getService();
     }
 
     @Test(description = "Determine if file needs to be downloaded.")

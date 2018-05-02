@@ -1,7 +1,7 @@
 package com.instaclustr.backup;
 
 import com.instaclustr.backup.task.RestoreTask;
-import com.instaclustr.backup.uploader.CloudDownloadUploadFactory;
+import com.instaclustr.backup.util.CloudDownloadUploadFactory;
 import com.instaclustr.backup.util.GlobalLock;
 
 

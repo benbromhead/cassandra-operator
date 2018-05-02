@@ -50,9 +50,6 @@ public class AWSDownloaderTest {
     private final String clusterId = "dummy-cluster-id";
     private final String backupBucket = "test-awsdownloader";
 
-    private final String accessKey = "XXXXXXXXX";
-    private final String secretKey = "YYYYYYYYYYYYYYYYY";
-
     private final String restoreFromNodeId = "dummy-node-id";
     private final String restoreFromClusterId = "dummy-cluster-id";
     private final String restoreFromBackupBucket = "test-awsdownloader";
@@ -63,10 +60,7 @@ public class AWSDownloaderTest {
 
         testHelperService.setupTempDirectories(tempDirs);
 
-        final AWSCredentials credentials = new BasicAWSCredentials(accessKey, secretKey);
-        AWSCredentialsProvider credentialsProvider = new AWSStaticCredentialsProvider(credentials);
-
-        AmazonS3 s3Client = new AmazonS3Client(credentialsProvider, new ClientConfiguration()
+        AmazonS3 s3Client = new AmazonS3Client(new ClientConfiguration()
                 .withMaxConnections(10 * 10)
                 .withSocketTimeout((int) TimeUnit.MINUTES.toMillis(5))
                 .withConnectionTimeout((int) TimeUnit.MINUTES.toMillis(5))
@@ -103,22 +97,6 @@ public class AWSDownloaderTest {
 
         Assert.assertTrue(tempDirs.get("test").resolve("data/dummy-table-1/dummy-table-1.txt").toFile().exists());
         Assert.assertTrue(tempDirs.get("test").resolve("data/dummy-table-2/dummy-table-2.txt").toFile().exists());
-    }
-
-    // Uploaded test file using: (key is only accessible by alwyn user)
-    // aws s3 cp test-encrypted.txt s3://test-awsdownloader/dummy-cluster-id/dummy-node-id/test-encrypted.txt --sse aws:kms --sse-kms-key-id 2b90c4a9-8107-45f7-bc28-f4621d30c209
-    @Test(description = "Can download KMS encrypted files.")
-    public void kmsEncryption() throws Exception {
-        //TODO support KMS?
-//        AWSDownloader awsDownloader = new AWSDownloader(transferManager, restoreFromClusterId, restoreFromNodeId, restoreFromBackupBucket);
-//        RemoteObjectReference remoteObjectReference = awsDownloader.objectKeyToRemoteReference(Paths.get("test-encrypted.txt"));
-//        awsDownloader.downloadFile(tempDirs.get("test").resolve("test-encrypted.txt"), remoteObjectReference);
-//
-//        Path testEncrypted = tempDirs.get("test").resolve("test-encrypted.txt");
-//        Assert.assertTrue(testEncrypted.toFile().exists());
-//
-//        final String content = new String(Files.readAllBytes(testEncrypted));
-//        Assert.assertTrue(content.contains("this is a test file"));
     }
 
     @Test(description = "Retrieve file list from S3")

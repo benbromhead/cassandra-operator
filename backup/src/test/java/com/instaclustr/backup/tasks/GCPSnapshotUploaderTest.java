@@ -21,6 +21,7 @@ import java.nio.file.Paths;
 
 import static org.testng.Assert.*;
 
+@Test(groups = {"gcp", "all"})
 public class GCPSnapshotUploaderTest {
 
     private Injector injector;
@@ -37,33 +38,23 @@ public class GCPSnapshotUploaderTest {
     private final int size = 0; //UploadSnapshotFile accepts size as a parameter though for GCP it's not used.
     private final String backupContents = "TestGCPBackup - if you see this file lurking in a bucket somewhere, please delete it to save us much needed cents.";
 
-    private final String instaclustrKey = "XXXXXXXXXXXXXXXX";
-
 
     @BeforeClass(alwaysRun=true)
     public void setup() throws IOException, URISyntaxException {
         cdcID = "test-cdc-id";
         nodeId = "test-node";
         bucket = "unittestbucket";
-        storage = StorageOptions.newBuilder()
-                .setProjectId("instaclustr-dev")
-                .setAuthCredentials(AuthCredentials.createForJson(new ByteArrayInputStream(instaclustrKey.getBytes()))).build().getService();
+        storage = StorageOptions.getDefaultInstance().getService();
 
-        setupTestConfigurationAndSources();
-    }
-
-    private void setupTestConfigurationAndSources() throws IOException, URISyntaxException {
         tempDir  = Files.createTempDirectory(cdcID);
-        System.out.println("Created Temp Directory:" + tempDir);
-
         contentDir = Files.createDirectory(tempDir.resolve(cdcID));
         backupFile = contentDir.resolve("GCPBackuptestfile");
 
         try (final PrintWriter writer = new PrintWriter(Files.newBufferedWriter(backupFile, StandardCharsets.UTF_8))) {
             writer.write("TestGCPBackup - if you see this file lurking in a bucket somewhere, please delete it to save us much needed cents.");
         }
-        System.out.println("Created backup file" + backupFile);
     }
+
 
     @Test
     public void basicDirectoryBackupTest() throws Exception {

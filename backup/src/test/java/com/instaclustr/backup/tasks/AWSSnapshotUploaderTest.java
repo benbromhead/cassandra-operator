@@ -33,9 +33,6 @@ import java.util.concurrent.TimeUnit;
 import static org.testng.Assert.*;
 
 public class AWSSnapshotUploaderTest {
-    private final String accessKey = "XXXXXXXXXX";
-    private final String secretKey = "YYYYYYYYYYYYYYY";
-
     private final String bucket  = "test-awsuploader";
     private final String nodeID = "test-node";
     private final String cdcID = "test-cdc-id";
@@ -50,11 +47,7 @@ public class AWSSnapshotUploaderTest {
 
     @BeforeClass(alwaysRun=true)
     public void setup() throws IOException, URISyntaxException {
-
-        final AWSCredentials credentials = new BasicAWSCredentials(accessKey, secretKey);
-        AWSCredentialsProvider credentialsProvider = new AWSStaticCredentialsProvider(credentials);
-
-        s3Client = new AmazonS3Client(credentialsProvider, new ClientConfiguration()
+        s3Client = new AmazonS3Client(new ClientConfiguration()
                 .withMaxConnections(10 * 10)
                 .withSocketTimeout((int) TimeUnit.MINUTES.toMillis(5))
                 .withConnectionTimeout((int) TimeUnit.MINUTES.toMillis(5))

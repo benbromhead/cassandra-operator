@@ -1,6 +1,6 @@
 package com.instaclustr.backup.tasks;
 
-import com.instaclustr.backup.uploader.CloudDownloadUploadFactory;
+import com.instaclustr.backup.util.CloudDownloadUploadFactory;
 import com.instaclustr.backup.uploader.AzureSnapshotUploader;
 import com.instaclustr.backup.uploader.RemoteObjectReference;
 import com.microsoft.azure.storage.blob.*;

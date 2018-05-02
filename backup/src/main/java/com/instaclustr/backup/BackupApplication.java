@@ -4,7 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.AbstractScheduledService;
 import com.google.common.util.concurrent.ServiceManager;
 import com.instaclustr.backup.task.BackupTask;
-import com.instaclustr.backup.uploader.CloudDownloadUploadFactory;
+import com.instaclustr.backup.util.CloudDownloadUploadFactory;
 import com.instaclustr.backup.uploader.FilesUploader;
 import com.instaclustr.backup.util.GlobalLock;
 import org.slf4j.Logger;

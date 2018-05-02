@@ -1,4 +1,4 @@
-package com.instaclustr.backup.uploader;
+package com.instaclustr.backup.util;
 
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
@@ -8,6 +8,7 @@ import com.google.common.base.Optional;
 import com.instaclustr.backup.CommonBackupArguments;
 import com.instaclustr.backup.RestoreArguments;
 import com.instaclustr.backup.downloader.*;
+import com.instaclustr.backup.uploader.*;
 import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 
