@@ -63,7 +63,7 @@ jobs:
 
           - run:
               name: Dump Pivotal kube config
-              command: mkdir -p ${HOME}/.kube/ && echo ${PIVOTAL_KUBECTL} > ${HOME}/.kube/config
+              command: mkdir -p ${HOME}/.kube/ && echo ${PIVOTAL_KUBECTL} | base64 -d > ${HOME}/.kube/config
 
           - run:
               name: Run integration tests
@@ -122,7 +122,7 @@ jobs:
 
         - run:
             name: Dump AWS Credentials to file
-            command: echo ${AWS_CONFIG} > ${HOME}/.aws/config
+            command: echo ${AWS_CONFIG} | base64 -d > ${HOME}/.aws/config
 
         - run:
             name: Run integration tests
