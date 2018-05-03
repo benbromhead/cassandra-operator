@@ -1,5 +1,6 @@
 package com.instaclustr.backup.task;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -30,6 +31,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -82,8 +84,8 @@ public class BackupTask implements Callable<Void> {
                       final BackupArguments arguments,
                       final GlobalLock globalLock) throws IOException {
         this.cassandraJMXServiceURL = arguments.jmxServiceURL;
-        this.snapshotManifestDirectory = arguments.sharedContainerPath.resolve(Paths.get("var/lib/node-agent/manifests"));
-        this.snapshotTokensDirectory = arguments.sharedContainerPath.resolve(Paths.get("var/lib/node-agent/tokens"));
+        this.snapshotManifestDirectory = arguments.sharedContainerPath.resolve(Paths.get("var/lib/cassandra-operator/manifests"));
+        this.snapshotTokensDirectory = arguments.sharedContainerPath.resolve(Paths.get("var/lib/cassandra-operator/tokens"));
         this.globalLock = globalLock;
 
         Files.createDirectories(snapshotManifestDirectory);
@@ -99,97 +101,110 @@ public class BackupTask implements Callable<Void> {
         this.arguments = arguments;
     }
 
-    private static Runnable runOnceRunnable(final Runnable r) {
-        return new Runnable() {
-            public boolean hasRun = false;
-
-            @Override
-            public void run() {
-                if (hasRun)
-                    return;
-
-                hasRun = true;
-                r.run();
-            }
-        };
-    }
-
     @Override
     public Void call() throws Exception {
         if (globalLock.getLock(arguments.waitForLock))
-            call0();
+            tryBackup();
 
         return null;
     }
 
-    protected void call0() throws Exception {
+    @VisibleForTesting
+    public void takeCassandraSnapshot(final StorageServiceMBean storageServiceMBean, final List<String> keyspaces, final String tag, final String columnFamily, final boolean drain) throws IOException, ExecutionException, InterruptedException {
+        if (columnFamily != null) {
+            final String keyspace = Iterables.getOnlyElement(keyspaces);
+
+            logger.info("Taking snapshot \"{}\" on {}.{}.", tag, keyspace, columnFamily);
+            storageServiceMBean.takeColumnFamilySnapshot(keyspace, columnFamily, tag);
+
+        } else {
+            logger.info("Taking snapshot \"{}\" on {}.", tag, (keyspaces.isEmpty() ? "\"all\"" : keyspaces));
+            storageServiceMBean.takeSnapshot(tag, keyspaces.toArray(new String[keyspaces.size()]));
+        }
+
+        // Optionally drain immediately following snapshot (e.g. pre-restore) - TODO: not sure of the "why", we do this here
+        if (drain) {
+            storageServiceMBean.drain();
+        }
+    }
+
+    @VisibleForTesting
+    public Collection<ManifestEntry> generateManifest(final List<String> tokens,
+                                                      final List<String> keyspaces,
+                                                      final String tag,
+                                                      final Path snapshotManifestDirectory,
+                                                      final Path backupDataRootKey) throws IOException {
+        // find files belonging to snapshot
+        final Map<String, ? extends Iterable<KeyspaceColumnFamilySnapshot>> snapshots = findKeyspaceColumnFamilySnapshots();
+        final Iterable<KeyspaceColumnFamilySnapshot> keyspaceColumnFamilySnapshots = snapshots.get(tag);
+
+        if (keyspaceColumnFamilySnapshots == null) {
+            if (!keyspaces.isEmpty()) {
+                logger.warn("No keyspace column family snapshot directories were found for snapshot \"{}\" of {}", tag, Joiner.on(",").join(keyspaces));
+                return ImmutableList.of();
+            }
+
+            // There should at least be system keyspace tables
+            throw new BackupException(String.format("No keyspace column family snapshot directories were found for snapshot \"%s\" of all data.", tag));
+        }
+
+        // generate manifest (set of object keys and source files defining the snapshot)
+        final Collection<ManifestEntry> manifest = new LinkedList<>(); // linked list to maintain order
+
+        Iterables.addAll(manifest, saveTokenList(tokens));
+
+        // add snapshot files to the manifest
+        for (final KeyspaceColumnFamilySnapshot keyspaceColumnFamilySnapshot : keyspaceColumnFamilySnapshots) {
+            final Path bucketKey = backupDataRootKey.resolve(Paths.get(keyspaceColumnFamilySnapshot.keyspace, keyspaceColumnFamilySnapshot.columnFamily));
+            Iterables.addAll(manifest, ssTableManifest(keyspaceColumnFamilySnapshot.snapshotDirectory, bucketKey));
+        }
+
+        logger.debug("{} files in manifest for snapshot \"{}\".", manifest.size(), tag);
+
+        if (manifest.stream().noneMatch((Predicate<ManifestEntry>) input -> input != null && input.localFile.toString().contains("-Data.db"))) {
+            throw new BackupException("No Data.db SSTables found in manifest. Aborting com.instaclustr.backup.");
+        }
+
+        return manifest;
+
+    }
+
+    private void tryBackup() throws Exception {
         try (final JMXConnector jmxConnector = JMXConnectorFactory.connect(cassandraJMXServiceURL)) {
 
             final MBeanServerConnection cassandraMBeanServerConnection = jmxConnector.getMBeanServerConnection();
             final StorageServiceMBean storageServiceMBean = JMX.newMBeanProxy(cassandraMBeanServerConnection, CassandraObjectNames.STORAGE_SERVICE, StorageServiceMBean.class);
 
-            final Runnable clearSnapshotRunnable = runOnceRunnable(() -> {
-                try {
-                    storageServiceMBean.clearSnapshot(arguments.snapshotTag);
-                    logger.info("Cleared snapshot \"{}\".", arguments.snapshotTag);
+            final Runnable clearSnapshotRunnable = new Runnable() {
+                private boolean hasRun = false;
 
-                } catch (final IOException e) {
-                    logger.error("Failed to cleanup snapshot {}.", arguments.snapshotTag, e);
+                @Override
+                public void run() {
+                    if (hasRun)
+                        return;
+
+                    hasRun = true;
+
+                    try {
+                        storageServiceMBean.clearSnapshot(arguments.snapshotTag);
+                        logger.info("Cleared snapshot \"{}\".", arguments.snapshotTag);
+
+                    } catch (final IOException e) {
+                        logger.error("Failed to cleanup snapshot {}.", arguments.snapshotTag, e);
+                    }
                 }
-            });
+            };
 
             Runtime.getRuntime().addShutdownHook(new Thread(clearSnapshotRunnable));
 
             try {
                 // take snapshot
-                if (arguments.columnFamily != null) {
-                    final String keyspace = Iterables.getOnlyElement(arguments.keyspaces);
+                takeCassandraSnapshot(storageServiceMBean,arguments.keyspaces, arguments.snapshotTag, arguments.columnFamily, arguments.drain);
 
-                    logger.info("Taking snapshot \"{}\" on {}.{}.", arguments.snapshotTag, keyspace, arguments.columnFamily);
-                    storageServiceMBean.takeColumnFamilySnapshot(keyspace, arguments.columnFamily, arguments.snapshotTag);
+                Collection<ManifestEntry> manifest = generateManifest(storageServiceMBean.getTokens(), arguments.keyspaces, arguments.snapshotTag, snapshotManifestDirectory, backupDataRootKey);
 
-                } else {
-                    logger.info("Taking snapshot \"{}\" on {}.", arguments.snapshotTag, (arguments.keyspaces.isEmpty() ? "\"all\"" : arguments.keyspaces));
-                    storageServiceMBean.takeSnapshot(arguments.snapshotTag, arguments.keyspaces.toArray(new String[arguments.keyspaces.size()]));
-                }
-
-                // Optionally drain immediately following snapshot (e.g. pre-restore)
-                if (arguments.drain) {
-                    storageServiceMBean.drain();
-                }
-
-                // find files belonging to snapshot
-                final Map<String, ? extends Iterable<KeyspaceColumnFamilySnapshot>> snapshots = findKeyspaceColumnFamilySnapshots();
-                final Iterable<KeyspaceColumnFamilySnapshot> keyspaceColumnFamilySnapshots = snapshots.get(arguments.snapshotTag);
-
-                if (keyspaceColumnFamilySnapshots == null) {
-                    if (!arguments.keyspaces.isEmpty()) {
-                        logger.warn("No keyspace column family snapshot directories were found for snapshot \"{}\" of {}", arguments.snapshotTag, Joiner.on(",").join(arguments.keyspaces));
-                        return;
-                    }
-
-                    // There should at least be system keyspace tables
-                    throw new BackupException(String.format("No keyspace column family snapshot directories were found for snapshot \"%s\" of all data.", arguments.snapshotTag));
-                }
-
-                // generate manifest (set of object keys and source files defining the snapshot)
-                final Collection<ManifestEntry> manifest = new LinkedList<>(); // linked list to maintain order
-
-                Iterables.addAll(manifest, saveTokenList(storageServiceMBean));
-
-                // add snapshot files to the manifest
-                for (final KeyspaceColumnFamilySnapshot keyspaceColumnFamilySnapshot : keyspaceColumnFamilySnapshots) {
-                    final Path bucketKey = backupDataRootKey.resolve(Paths.get(keyspaceColumnFamilySnapshot.keyspace, keyspaceColumnFamilySnapshot.columnFamily));
-                    Iterables.addAll(manifest, ssTableManifest(keyspaceColumnFamilySnapshot.snapshotDirectory, bucketKey));
-                }
-
-                logger.debug("{} files in manifest for snapshot \"{}\".", manifest.size(), arguments.snapshotTag);
-
-                if (manifest.stream().noneMatch((Predicate<ManifestEntry>) input -> input != null && input.localFile.toString().contains("-Data.db"))) {
-                    throw new BackupException("No Data.db SSTables found in manifest. Aborting com.instaclustr.backup.");
-                }
-
-                Iterables.addAll(manifest, saveManifest(manifest));
+                //Save manifest to disk and add the path of the manifest file to the in memory manifest copy
+                Iterables.addAll(manifest, saveManifest(manifest, snapshotManifestDirectory, arguments.snapshotTag));
 
                 filesUploader.uploadOrFreshenFiles(manifest);
 
@@ -199,7 +214,8 @@ public class BackupTask implements Callable<Void> {
         }
     }
 
-    private static Map<String, List<Path>> listSSTables(Path table) throws IOException {
+    @VisibleForTesting
+    public static Map<String, List<Path>> listSSTables(Path table) throws IOException {
         return Files.list(table)
                 .filter(path -> SSTABLE_RE.matcher(path.getFileName().toString()).matches())
                 .collect(Collectors.groupingBy(path -> {
@@ -210,6 +226,7 @@ public class BackupTask implements Callable<Void> {
                 }));
     }
 
+    @VisibleForTesting
     public static String calculateChecksum(final Path filePath) throws IOException {
         try(final FileInputStream fileInputStream = new FileInputStream(filePath.toFile())) {
 
@@ -283,8 +300,8 @@ public class BackupTask implements Callable<Void> {
         return manifest;
     }
 
-    private Iterable<ManifestEntry> saveManifest(final Iterable<ManifestEntry> manifest) throws IOException {
-        final Path manifestFilePath = Files.createFile(snapshotManifestDirectory.resolve(arguments.snapshotTag));
+    private Iterable<ManifestEntry> saveManifest(final Iterable<ManifestEntry> manifest, Path snapshotManifestDirectory, String tag) throws IOException {
+        final Path manifestFilePath = Files.createFile(snapshotManifestDirectory.resolve(tag));
 
         try (final Writer writer = Files.newBufferedWriter(manifestFilePath)) {
             for (final ManifestEntry manifestEntry : manifest) {
@@ -298,13 +315,13 @@ public class BackupTask implements Callable<Void> {
         return ImmutableList.of(new ManifestEntry(backupManifestsRootKey.resolve(manifestFilePath.getFileName()), manifestFilePath, ManifestEntry.Type.MANIFEST_FILE));
     }
 
-    private Iterable<ManifestEntry> saveTokenList(final StorageServiceMBean storageServiceMBean) throws IOException {
+    private Iterable<ManifestEntry> saveTokenList(List<String> tokens) throws IOException {
         final Path tokensFilePath = snapshotTokensDirectory.resolve(String.format("%s-tokens.yaml", arguments.snapshotTag));
 
         try (final OutputStream stream = Files.newOutputStream(tokensFilePath); final PrintStream writer = new PrintStream(stream)) {
             writer.println("# automatically generated by cassandra-com.instaclustr.backup.");
             writer.println("# add the following to cassandra.yaml when restoring to a new cluster.");
-            writer.printf("initial_token: %s%n", Joiner.on(',').join(storageServiceMBean.getTokens()));
+            writer.printf("initial_token: %s%n", Joiner.on(',').join(tokens));
         }
 
         tokensFilePath.toFile().deleteOnExit();

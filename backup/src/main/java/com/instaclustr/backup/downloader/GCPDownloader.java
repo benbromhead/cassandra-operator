@@ -22,15 +22,14 @@ public class GCPDownloader extends Downloader {
     private static final Logger logger = LoggerFactory.getLogger(GCPDownloader.class);
 
     private final Storage storage;
-    private final String restoreFromCdcId;
+    private final String bucketId;
     private final String restoreFromNodeId;
 
-    public GCPDownloader(
-                         final Storage storage,
-                         final String restoreFromCdcId,
+    public GCPDownloader(final Storage storage,
+                         final String bucketId,
                          final String restoreBackupId) {
         this.storage = storage;
-        this.restoreFromCdcId = restoreFromCdcId;
+        this.bucketId = bucketId;
         this.restoreFromNodeId = restoreBackupId;
     }
 
@@ -51,7 +50,7 @@ public class GCPDownloader extends Downloader {
     public RemoteObjectReference objectKeyToRemoteReference(final Path objectKey) {
         // objectKey is kept simple (e.g. "manifests/autosnap-123") so that it directly reflects the local path
         final String remotePath = restoreFromNodeId + "/" + objectKey.toString();
-        final BlobId blobId = BlobId.of(restoreFromCdcId, remotePath);
+        final BlobId blobId = BlobId.of(bucketId, remotePath);
         return new GCPRemoteObjectReference(objectKey, blobId);
     }
 
