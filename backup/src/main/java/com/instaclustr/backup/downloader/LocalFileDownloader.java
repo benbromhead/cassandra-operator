@@ -1,5 +1,9 @@
 package com.instaclustr.backup.downloader;
 
+import com.instaclustr.backup.RestoreArguments;
+import com.instaclustr.backup.common.LocalFileObjectReference;
+import com.instaclustr.backup.common.RemoteObjectReference;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,31 +14,15 @@ import java.util.stream.Collectors;
 
 public class LocalFileDownloader extends Downloader {
     private final Path sourceDirectory;
-    private final String restoreFromNodeId;
 
-    public LocalFileDownloader(final Path sourceDirectory,
-                               final String restoreFromNodeId) {
-        this.sourceDirectory = sourceDirectory;
-        this.restoreFromNodeId = restoreFromNodeId;
-    }
-
-    static class LocalFileObjectReference extends RemoteObjectReference {
-        private final String canonicalPath;
-
-        public LocalFileObjectReference(final Path objectKey, final String canonicalPath) {
-            super(objectKey);
-            this.canonicalPath = canonicalPath;
-        }
-
-        public Path getObjectKey() {
-            return objectKey;
-        }
+    public LocalFileDownloader(final RestoreArguments arguments) {
+        super(arguments);
+        this.sourceDirectory = Paths.get(arguments.backupBucket);
     }
 
     @Override
     public RemoteObjectReference objectKeyToRemoteReference(final Path objectKey) throws Exception {
-        final String canonicalPath = sourceDirectory.resolve(restoreFromNodeId).resolve(objectKey).toString();
-        return new LocalFileObjectReference(objectKey, canonicalPath);
+        return new LocalFileObjectReference(objectKey);
     }
 
     @Override

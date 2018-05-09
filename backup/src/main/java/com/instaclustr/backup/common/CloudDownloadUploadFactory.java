@@ -1,10 +1,11 @@
-package com.instaclustr.backup.util;
+package com.instaclustr.backup.common;
 
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
 import com.google.common.base.Optional;
+import com.instaclustr.backup.BackupArguments;
 import com.instaclustr.backup.CommonBackupArguments;
 import com.instaclustr.backup.RestoreArguments;
 import com.instaclustr.backup.downloader.*;
@@ -32,41 +33,39 @@ public class CloudDownloadUploadFactory {
 
 
 
-    public static SnapshotUploader getUploader(final CommonBackupArguments arguments) throws URISyntaxException, StorageException, ConfigurationException {
+    public static SnapshotUploader getUploader(final BackupArguments arguments) throws URISyntaxException, StorageException, ConfigurationException {
         //final String backupID, final String clusterID, final String backupBucket,
 
         switch (arguments.storageProvider) {
             case AWS_S3:
                 //TODO: support encrypted backups via KMS
                 //AWS client set to auto detect credentials
-                return new AWSSnapshotUploader(getTransferManager(), arguments.backupId, arguments.clusterID, arguments.backupBucket, Optional.absent());
+                return new AWSSnapshotUploader(getTransferManager(), arguments);
             case AZURE_BLOB:
                 //TODO: use SAS token?
-                return new AzureSnapshotUploader(arguments.backupId, arguments.clusterID, arguments.backupBucket, getCloudBlobClient());
+                return new AzureSnapshotUploader(getCloudBlobClient(), arguments);
             case GCP_BLOB:
-                return new GCPSnapshotUploader(getGCPStorageClient(), arguments.backupId, arguments.clusterID, arguments.backupBucket);
+                return new GCPSnapshotUploader(getGCPStorageClient(), arguments);
             case FILE:
-                return new LocalFileSnapShotUploader(Paths.get(arguments.backupBucket)); //TODO: fix doco
+                return new LocalFileSnapShotUploader(Paths.get(arguments.backupBucket), arguments); //TODO: fix doco
         }
         throw new ConfigurationException("Could not create Snapshot Uploader");
     }
 
 
     public static Downloader getDownloader(final RestoreArguments arguments) throws URISyntaxException, StorageException, ConfigurationException {
-        //final String backupID, final String clusterID, final String backupBucket,
-
         switch (arguments.storageProvider) {
             case AWS_S3:
                 //TODO: support encrypted backups via KMS
                 //AWS client set to auto detect credentials
-                return new AWSDownloader(getTransferManager(), arguments.clusterID, arguments.sourceBackupID, arguments.backupBucket);
+                return new AWSDownloader(getTransferManager(), arguments);
             case AZURE_BLOB:
                 //TODO: use SAS token?
-                return new AzureDownloader(getCloudBlobClient(), arguments.clusterID, arguments.sourceBackupID);
+                return new AzureDownloader(getCloudBlobClient(), arguments);
             case GCP_BLOB:
-                return new GCPDownloader(getGCPStorageClient(), arguments.clusterDataCentreId, arguments.sourceBackupID);
+                return new GCPDownloader(getGCPStorageClient(), arguments);
             case FILE:
-                return new LocalFileDownloader(Paths.get(arguments.backupBucket), arguments.sourceBackupID);
+                return new LocalFileDownloader(arguments);
         }
         throw new ConfigurationException("Could not create Snapshot Uploader");
     }

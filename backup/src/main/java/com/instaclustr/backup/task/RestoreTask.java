@@ -4,18 +4,22 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.instaclustr.backup.RestoreArguments;
+import com.instaclustr.backup.common.RemoteObjectReference;
 import com.instaclustr.backup.downloader.Downloader;
-import com.instaclustr.backup.downloader.RemoteObjectReference;
+import com.instaclustr.backup.common.CloudDownloadUploadFactory;
 import com.instaclustr.backup.util.Directories;
 import com.instaclustr.backup.util.FileUtils;
 import com.instaclustr.backup.util.GlobalLock;
+import com.microsoft.azure.storage.StorageException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.naming.ConfigurationException;
 import java.io.BufferedReader;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,22 +46,23 @@ public class RestoreTask implements Callable<Void> {
     private final Path fullCommitLogRestoreDirectory;
     private final Multimap<String, String> keyspaceTableSubset;
 
-    public RestoreTask(final Downloader downloaderProvider,
-                       final Path cassandraDataDirectory,
-                       final Path cassandraConfigDirectory,
-                       final Path sharedContainerRoot,
-//                       final Optional<String> commitLogRestoreDirectory,
-                       final GlobalLock globalLock,
-                       final RestoreArguments arguments, Multimap<String, String> keyspaceTableSubset) {
-        this.downloaderProvider = downloaderProvider;
+    public RestoreTask(final GlobalLock globalLock,
+                       final RestoreArguments arguments
+    ) throws StorageException, ConfigurationException, URISyntaxException {
+
+
+
+
+
+        this.downloaderProvider = CloudDownloadUploadFactory.getDownloader(arguments);
         this.globalLock = globalLock;
         this.arguments = arguments;
-        this.cassandraDataDirectory = cassandraDataDirectory;
-        this.cassandraConfigDirectory = cassandraConfigDirectory;
-        this.sharedContainerRoot = sharedContainerRoot;
-        this.commitLogRestoreDirectory = Paths.get("/var/lib/cassandra/commitlog_restore"); //TODO: hardcoded path, make this an argument when we get to supporting CL
+        this.cassandraDataDirectory = arguments.cassandraDirectory; //TODO change to cassandra root directory
+        this.cassandraConfigDirectory = arguments.cassandraConfigDirectory;
+        this.sharedContainerRoot = arguments.sharedContainerPath;
+        this.commitLogRestoreDirectory = arguments.cassandraDirectory.resolve("commitlog_restore"); //TODO: hardcoded path, make this an argument when we get to supporting CL
         this.fullCommitLogRestoreDirectory = this.sharedContainerRoot.resolve(this.commitLogRestoreDirectory.subpath(0, this.commitLogRestoreDirectory.getNameCount()));
-        this.keyspaceTableSubset = keyspaceTableSubset;
+        this.keyspaceTableSubset = arguments.keyspaceTables;
     }
 
     private Map<String, String> restoreParameters(final RestoreArguments restoreArguments) {
@@ -69,7 +74,7 @@ public class RestoreTask implements Callable<Void> {
                     .stream()
                     .map(x -> x.getKey() + "." + x.getValue())
                     .reduce((x,y) -> x + "," + y ).orElse(""));
-            put("sourceBackupID", restoreArguments.sourceBackupID);
+            put("sourceNodeID", restoreArguments.clusterId);
             put("cluster", restoreArguments.clusterId);
             put("com.instaclustr.backup-bucket", restoreArguments.backupBucket);
             put("restore-system-keyspace", String.valueOf(restoreArguments.restoreSystemKeyspace));

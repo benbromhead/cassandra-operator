@@ -1,5 +1,7 @@
 package com.instaclustr.backup;
 
+import com.instaclustr.backup.task.RestoreTask;
+import com.instaclustr.backup.util.GlobalLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,7 +14,11 @@ public class RestoreApplication {
         arguments.parseArguments(args);
 
         try {
-            RestoreTaskLauncher.run(arguments);
+            GlobalLock globalLock = new GlobalLock(arguments.sharedContainerPath.toString());
+            new RestoreTask(
+                    globalLock,
+                    arguments
+            ).call();
             logger.info("Restore completed successfully.");
             System.exit(0);
         } catch (final Exception e) {

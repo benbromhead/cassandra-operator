@@ -9,6 +9,8 @@ import com.amazonaws.services.s3.model.*;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.Upload;
 import com.google.common.base.Optional;
+import com.instaclustr.backup.BackupArguments;
+import com.instaclustr.backup.common.RemoteObjectReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,44 +25,37 @@ public class AWSSnapshotUploader extends SnapshotUploader {
 
     private final TransferManager transferManager;
 
-    private final String backupID;
-    private final String clusterID;
-    private final String backupBucket;
-
     private final Optional<String> kmsId;
 
     public AWSSnapshotUploader(final TransferManager transferManager,
-                               final String backupID,
-                               final String clusterID,
-                               final String backupBucket,
-                               final Optional<String> kmsId) {
+                               final BackupArguments arguments) {
+        super(arguments.clusterId, arguments.backupId, arguments.backupBucket);
 
         this.transferManager = transferManager;
-        this.backupID = backupID;
-        this.clusterID = clusterID;
-        this.backupBucket = backupBucket;
-        this.kmsId = kmsId;
+        this.kmsId = Optional.absent();
     }
 
-    static class AWSRemoteObjectReference implements RemoteObjectReference {
-        final String canonicalPath;
+    static class AWSRemoteObjectReference extends RemoteObjectReference {
+        public AWSRemoteObjectReference(Path objectKey, String canonicalPath) {
+            super(objectKey, canonicalPath);
+        }
 
-        AWSRemoteObjectReference(final String canonicalPath) {
-            this.canonicalPath = canonicalPath;
+        @Override
+        public Path getObjectKey() {
+            return objectKey;
         }
     }
 
     @Override
     public RemoteObjectReference objectKeyToRemoteReference(final Path objectKey) {
-        final String canonicalPath = Paths.get(clusterID).resolve(backupID).resolve(objectKey).toString();
-        return new AWSRemoteObjectReference(canonicalPath);
+        return new AWSRemoteObjectReference(objectKey, resolveRemotePath(objectKey));
     }
 
     @Override
     public FreshenResult freshenRemoteObject(final RemoteObjectReference object) throws InterruptedException {
         final String canonicalPath = ((AWSRemoteObjectReference) object).canonicalPath;
 
-        final CopyObjectRequest copyRequest = new CopyObjectRequest(backupBucket, canonicalPath, backupBucket, canonicalPath)
+        final CopyObjectRequest copyRequest = new CopyObjectRequest(restoreFromBackupBucket, canonicalPath, restoreFromBackupBucket, canonicalPath)
                 .withStorageClass(StorageClass.Standard);
 
         if (kmsId.isPresent()) {
@@ -89,7 +84,7 @@ public class AWSSnapshotUploader extends SnapshotUploader {
     public void uploadSnapshotFile(final long size, final InputStream localFileStream, final RemoteObjectReference object) throws Exception {
         final AWSRemoteObjectReference awsRemoteObjectReference = (AWSRemoteObjectReference) object;
 
-        final PutObjectRequest putObjectRequest = new PutObjectRequest(backupBucket, awsRemoteObjectReference.canonicalPath, localFileStream,
+        final PutObjectRequest putObjectRequest = new PutObjectRequest(restoreFromBackupBucket, awsRemoteObjectReference.canonicalPath, localFileStream,
                 new ObjectMetadata() {{
                     setContentLength(size);
                 }}
@@ -128,8 +123,8 @@ public class AWSSnapshotUploader extends SnapshotUploader {
 
         logger.info("Cleaning up multipart uploads older than {}.", yesterdayInstant);
 
-        final ListMultipartUploadsRequest listMultipartUploadsRequest = new ListMultipartUploadsRequest(backupBucket)
-                .withPrefix(clusterID);
+        final ListMultipartUploadsRequest listMultipartUploadsRequest = new ListMultipartUploadsRequest(restoreFromBackupBucket)
+                .withPrefix(restoreFromClusterId);
 
         while (true) {
             final MultipartUploadListing multipartUploadListing = s3Client.listMultipartUploads(listMultipartUploadsRequest);
@@ -140,7 +135,7 @@ public class AWSSnapshotUploader extends SnapshotUploader {
                         logger.info("Aborting multi-part upload for key \"{}\" initiated on {}", u.getKey(), u.getInitiated().toInstant());
 
                         try {
-                            s3Client.abortMultipartUpload(new AbortMultipartUploadRequest(backupBucket, u.getKey(), u.getUploadId()));
+                            s3Client.abortMultipartUpload(new AbortMultipartUploadRequest(restoreFromBackupBucket, u.getKey(), u.getUploadId()));
 
                         } catch (final AmazonClientException e) {
                             logger.error("Failed to abort multipart upload for key \"{}\".", u.getKey(), e);

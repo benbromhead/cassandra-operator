@@ -19,13 +19,7 @@ public class RestoreArguments extends BaseArguments {
     }
 
     @Option(name = "-bi", aliases = {"--com.instaclustr.backup-id"}, metaVar = "com.instaclustr.backup ID", usage = "Backup ID to restore from. Normally just the source nodeID, but if the node has replaced another node might be previous nodeID.", required = true)
-    public String sourceBackupID;
-
-    @Option(name = "-cdc", aliases = {"--cluster-data-centre"}, metaVar = "cluster data centre ID", usage = "Parent cluster data centre of node to restore from.")
-    public String clusterDataCentreId;
-
-    @Option(name = "-c", aliases = {"--cluster"}, metaVar = "cluster ID", usage = "Parent cluster of node to restore from.", required = true)
-    public String clusterId;
+    public String sourceNodeID;
 
     @Option(name = "-bb", aliases = {"--com.instaclustr.backup-bucket"}, metaVar = "bucket name", usage = "Bucket hosting the snapshot files to restore.", required = true)
     public String backupBucket;

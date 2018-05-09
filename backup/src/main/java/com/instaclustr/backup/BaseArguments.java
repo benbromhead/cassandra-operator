@@ -71,9 +71,8 @@ public abstract class BaseArguments {
     @Option(name = "--bs", aliases = {"--blob-storage"}, usage = "Blob storage provider (AWS, AZURE, GCP, FILE)", metaVar = "FILE")
     public StorageProvider storageProvider;
 
-
-    @Option(name = "--cid", aliases = {"--cluster-id"}, usage = "Cluster ID - normally the cluster name", metaVar = "cluster_name")
-    public String clusterID;
+    @Option(name = "-c", aliases = {"--cluster"}, metaVar = "cluster ID", usage = "Parent cluster of node to restore from.", required = true)
+    public String clusterId;
 
     //TODO: Allow user to override commitlog directory (some environments may allow different disks which better suit commitlog performance
     @Option(name = "--dd", aliases = {"--data-directory"}, usage = "Base directory that contains the Cassandra data, cache and commitlog directories", metaVar = "/cassandra", handler = PathOptionHandler.class)

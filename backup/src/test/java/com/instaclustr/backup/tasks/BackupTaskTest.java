@@ -3,6 +3,7 @@ package com.instaclustr.backup.tasks;
 import com.google.common.collect.*;
 import com.instaclustr.backup.BackupArguments;
 import com.instaclustr.backup.RestoreArguments;
+import com.instaclustr.backup.downloader.GCPDownloader;
 import com.instaclustr.backup.downloader.LocalFileDownloader;
 import com.instaclustr.backup.jmx.CassandraVersion;
 import com.instaclustr.backup.service.TestHelperService;
@@ -23,6 +24,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -43,6 +45,7 @@ public class BackupTaskTest {
     private static final String backupBucket = Optional.ofNullable(System.getenv("TEST_BUCKET")).orElse("fooo");
     private final Long independentChecksum = 2973505342L;
     private List<String> tokens = ImmutableList.of("1", "2", "3", "4", "5");
+    private String confDir = "config";
 
     private class TestFileConfig {
         final CassandraVersion cassandraVersion;
@@ -90,8 +93,6 @@ public class BackupTaskTest {
     }
 
     private final List<TestFileConfig> versionsToTest = ImmutableList.of(
-            new TestFileConfig(CassandraVersion.TWO_ZERO),
-            new TestFileConfig(CassandraVersion.TWO_TWO),
             new TestFileConfig(CassandraVersion.THREE)
     );
 
@@ -134,7 +135,7 @@ public class BackupTaskTest {
             tempDirs.put(testFileConfig.cassandraVersion.name(), null);
             tempDirs.put(testFileConfig.cassandraVersion.name() + "/data", null);
             tempDirs.put(testFileConfig.cassandraVersion.name() + "/hints", null);
-            tempDirs.put(testFileConfig.cassandraVersion.name() + "/etc/cassandra", null);
+            tempDirs.put(testFileConfig.cassandraVersion.name() + "/" + confDir, null);
         }
 
         testHelperService.setupTempDirectories(tempDirs);
@@ -145,7 +146,12 @@ public class BackupTaskTest {
     private void clearDirs() throws IOException {
 //        Iterator<Map.Entry<String, Path>> tempDirsIterator = tempDirs.entrySet().iterator();
         tempDirs.entrySet().stream().forEach(entry -> {
-            if (entry.getKey().equals("dummyRemoteSource")) {
+            if (entry.getKey().contains(confDir)) {
+                try {
+                    Files.createDirectories(entry.getValue());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 return;
             }
 
@@ -158,6 +164,17 @@ public class BackupTaskTest {
         });
     }
 
+    public void createConfigFiles(final Path configPath) throws IOException {
+        //cassandra-env.sh
+        try (final Writer writer = Files.newBufferedWriter(configPath.resolve("cassandra-env.sh"))) {
+            writer.write("#bash settings\nexport JVM_OPTS=\"-Xmx4G\"");
+        }
+
+        try (final Writer writer = Files.newBufferedWriter(configPath.resolve("cassandra.yaml"))) {
+            writer.write("cluster_name: Test\nauto_bootstrap: true");
+        }
+    }
+
 //    @BeforeMethod()
     public void resetDirectories() throws IOException {
 
@@ -165,7 +182,8 @@ public class BackupTaskTest {
 
         for (TestFileConfig testFileConfig : versionsToTest) {
             final Path root = tempDirs.get(testFileConfig.cassandraVersion.name());
-            final Path data = root.resolve("data/");
+            final Path data = root.resolve(Directories.CASSANDRA_DATA);
+            final Path config = root.resolve(confDir);
             final String keyspace = "keyspace1";
             final String table1 = "table1";
             createSSTable(data, keyspace, table1, 1, testFileConfig, false, testSnapshotName);
@@ -175,6 +193,8 @@ public class BackupTaskTest {
             final String table2 = "table2";
             createSSTable(data, keyspace, table2, 1, testFileConfig, true, testSnapshotName);
             createSSTable(data, keyspace, table2, 2, testFileConfig, true, testSnapshotName);
+
+            createConfigFiles(config);
 
         }
     }
@@ -203,6 +223,8 @@ public class BackupTaskTest {
 
     @Test(description = "Full backup and restore to an existing cluster")
     public void basicRestore() throws Exception {
+        final String keyspace = "keyspace1";
+        final String table = "table1";
         for (TestFileConfig testFileConfig : versionsToTest) {
             final Path sharedContainerRoot = tempDirs.get(testFileConfig.cassandraVersion.name());
             final File manifestFile = new File(sharedContainerRoot.resolve("manifests/" + testSnapshotName).toString());
@@ -210,7 +232,8 @@ public class BackupTaskTest {
             final List<String> rawBaseArguments = ImmutableList.of(
                     "--bs", "GCP_BLOB",
                     "--dd", sharedContainerRoot.toString(),
-                    "--cd", sharedContainerRoot.resolve("etc/cassandra").toString(),
+                    "--cd", sharedContainerRoot.resolve(confDir).toString(),
+                    "-c", clusterId,
                     "-p", sharedContainerRoot.toString()
             );
 
@@ -226,9 +249,9 @@ public class BackupTaskTest {
 
             final List<String> rawRestoreArguments = ImmutableList.of(
                     "-bi", nodeId,
-                    "-c", clusterId,
                     "-bb", backupBucket,
-                    "-s", testSnapshotName
+                    "-s", testSnapshotName,
+                    "-kt", keyspace + "." + table
 
 //                    "-j", "JMXxxxxx"
             );
@@ -249,17 +272,16 @@ public class BackupTaskTest {
 
             calendar.set(2017, Calendar.MAY, 2, 2, 6, 0);
             restoreArguments.timestampStart = calendar.getTimeInMillis();
-            calendar.set(2017, Calendar.MAY, 2, 2, 7, 0);
-            restoreArguments.timestampEnd = calendar.getTimeInMillis();
+            restoreArguments.timestampEnd = System.currentTimeMillis();
 
 
             new BackupTask(backupArguments, new GlobalLock(sharedContainerRoot.toString())).call();
 
             clearDirs();
+            createConfigFiles(sharedContainerRoot.resolve(confDir));
+
 
             //Make sure we deleted the files
-            String keyspace = "keyspace1";
-            String table = "table1";
 
             resolveSSTableComponentPaths(keyspace, table, sharedContainerRoot, 1, testFileConfig).stream()
                     .map(Path::toFile)
@@ -267,13 +289,7 @@ public class BackupTaskTest {
                     .forEach(Assert::assertFalse);
 
 
-            new RestoreTask(new LocalFileDownloader(tempDirs.get("dummyRemoteSource"), nodeId),
-                    sharedContainerRoot,
-                    sharedContainerRoot.resolve("etc/cassandra"),
-                    sharedContainerRoot,
-                    new GlobalLock(sharedContainerRoot.toString()),
-                    restoreArguments,
-                    HashMultimap.create()).call();
+            new RestoreTask(new GlobalLock(sharedContainerRoot.toString()), restoreArguments).call();
 
             // Confirm manifest downloaded
             Assert.assertTrue(manifestFile.exists());
@@ -282,23 +298,17 @@ public class BackupTaskTest {
                 resolveSSTableComponentPaths(keyspace, table, sharedContainerRoot, sequence, testFileConfig).stream()
                         .map(Path::toFile)
                         .map(File::exists)
-                        .forEach(Assert::assertFalse));
+                        .forEach(Assert::assertTrue));
 
             // Confirm cassandra.yaml present and includes tokens
-            final Path cassandraYaml = sharedContainerRoot.resolve("etc/cassandra").resolve("cassandra.yaml");
+            final Path cassandraYaml = sharedContainerRoot.resolve(confDir).resolve("cassandra.yaml");
             Assert.assertTrue(cassandraYaml.toFile().exists());
             String cassandraYamlText = new String(Files.readAllBytes(cassandraYaml));
-            Assert.assertTrue(cassandraYamlText.contains("initial_token: "));
+            Assert.assertTrue(cassandraYamlText.contains("initial_token: ")); //this is not really testing that we have configured tokens properly
             Assert.assertTrue(cassandraYamlText.contains("auto_bootstrap: false"));
             Assert.assertFalse(cassandraYamlText.contains("auto_bootstrap: true"));
-            Assert.assertTrue(cassandraYamlText.contains("cluster_name: alwyn-restore"));
-            Assert.assertTrue(cassandraYamlText.contains("server_encryption_options: {keystore: /etc/cassandra/keystore.jks, truststore: /etc/cassandra/truststore.jks"));
-
         }
     }
-
-
-
 
 
     @Test(description = "Check that we are checksumming properly")
@@ -313,24 +323,24 @@ public class BackupTaskTest {
         }
     }
 
-    @Test(description = " Test Manifest Method")
-    public void testGenerateManifest() throws Exception {
-        for (TestFileConfig testFileConfig: versionsToTest) {
-            final Path root = tempDirs.get(testFileConfig.cassandraVersion.name());
-            final Path path = root.resolve("data/");
-            final List<String> keyspaces = ImmutableList.of("keyspace1");
-            final List<String> tables = ImmutableList.of("table1");
-            Collection<ManifestEntry> manifestEntries = BackupTask.generateManifest(keyspaces, testSnapshotName, path);
-
-            //Make sure all components of the SSTable are in it.
-            for (String name : SSTABLE_FILES) {
-                Path expected = tempDirs.get(testFileConfig.cassandraVersion.name()).resolve("data/keyspace1/table1").resolve(String.format("%s-%s-big-%s", testFileConfig.getSstablePrefix("keyspace1", "table1"), 1, name));
-                Assert.assertEquals(manifestEntries.stream()
-                        .anyMatch(x -> Paths.get("/").resolve(x.objectKey.subpath(0, x.objectKey.getNameCount() - 2).resolve(x.objectKey.getFileName())).compareTo(expected) == 0), true);
-
-            }
-        }
-    }
+//    @Test(description = " Test Manifest Method")
+//    public void testGenerateManifest() throws Exception {
+//        for (TestFileConfig testFileConfig: versionsToTest) {
+//            final Path root = tempDirs.get(testFileConfig.cassandraVersion.name());
+//            final Path path = root.resolve("data/");
+//            final List<String> keyspaces = ImmutableList.of("keyspace1");
+//            final List<String> tables = ImmutableList.of("table1");
+//            Collection<ManifestEntry> manifestEntries = BackupTask.generateManifest(keyspaces, testSnapshotName, path);
+//
+//            //Make sure all components of the SSTable are in it.
+//            for (String name : SSTABLE_FILES) {
+//                Path expected = tempDirs.get(testFileConfig.cassandraVersion.name()).resolve("data/keyspace1/table1").resolve(String.format("%s-%s-big-%s", testFileConfig.getSstablePrefix("keyspace1", "table1"), 1, name));
+//                Assert.assertEquals(manifestEntries.stream()
+//                        .anyMatch(x -> Paths.get("/").resolve(x.objectKey.subpath(0, x.objectKey.getNameCount() - 2).resolve(x.objectKey.getFileName())).compareTo(expected) == 0), true);
+//
+//            }
+//        }
+//    }
 
     @Test(description = "Test that the manifest is correctly constructed, includes expected files and generates checksum if necessary")
     public void testSSTableLister() throws Exception {

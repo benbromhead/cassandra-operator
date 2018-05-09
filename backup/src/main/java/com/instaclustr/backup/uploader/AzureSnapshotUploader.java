@@ -1,7 +1,8 @@
 package com.instaclustr.backup.uploader;
 
-import com.microsoft.azure.storage.CloudStorageAccount;
-import com.microsoft.azure.storage.StorageCredentialsAccountAndKey;
+import com.instaclustr.backup.BackupArguments;
+import com.instaclustr.backup.common.AzureRemoteObjectReference;
+import com.instaclustr.backup.common.RemoteObjectReference;
 import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.*;
 import org.slf4j.Logger;
@@ -21,36 +22,22 @@ public class AzureSnapshotUploader extends SnapshotUploader {
 
     private static final String DATE_TIME_METADATA_KEY = "LastFreshened";
 
-    private final String backupID;
-    private final String clusterID;
-
     private final CloudBlobContainer blobContainer;
 
-    public AzureSnapshotUploader(final String backupID,
-                                 final String clusterID,
-                                 final String backupBucket,
-                                 final CloudBlobClient cloudBlobClient) throws URISyntaxException, StorageException {
-        this.backupID = backupID;
-        this.clusterID = clusterID;
+    public AzureSnapshotUploader(final CloudBlobClient cloudBlobClient,
+                                 final BackupArguments arguments) throws URISyntaxException, StorageException {
+        super(arguments.clusterId, arguments.backupId, arguments.backupBucket);
 
         //Currently just use clusterId (name) as container reference
-        this.blobContainer = cloudBlobClient.getContainerReference(backupBucket);
+        this.blobContainer = cloudBlobClient.getContainerReference(restoreFromBackupBucket);
     }
 
-    static class AzureRemoteObjectReference implements RemoteObjectReference {
-        final CloudBlockBlob blob;
 
-        AzureRemoteObjectReference(final CloudBlockBlob blob) {
-            this.blob = blob;
-        }
-    }
 
     @Override
     public RemoteObjectReference objectKeyToRemoteReference(final Path objectKey) throws Exception {
-        final String canonicalPath = Paths.get(clusterID).resolve(backupID).resolve(objectKey).toString();
-        final CloudBlockBlob blob = this.blobContainer.getBlockBlobReference(canonicalPath);
-
-        return new AzureRemoteObjectReference(blob);
+        String canonicalPath = resolveRemotePath(objectKey); //TODO move to RemoteObject implementations
+        return new AzureRemoteObjectReference(objectKey, canonicalPath, this.blobContainer.getBlockBlobReference(canonicalPath));
     }
 
     @Override
@@ -88,7 +75,7 @@ public class AzureSnapshotUploader extends SnapshotUploader {
     private void deleteStaleBlobs() throws StorageException, URISyntaxException {
         final Date expiryDate = Date.from(ZonedDateTime.now().minusWeeks(1).toInstant());
 
-        final CloudBlobDirectory directoryReference = blobContainer.getDirectoryReference(clusterID);
+        final CloudBlobDirectory directoryReference = blobContainer.getDirectoryReference(restoreFromClusterId);
 
         for (final ListBlobItem blob : directoryReference.listBlobs(null, true, EnumSet.noneOf(BlobListingDetails.class), null, null)) {
             if (!(blob instanceof CloudBlob))

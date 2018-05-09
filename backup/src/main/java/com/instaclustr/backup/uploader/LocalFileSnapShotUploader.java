@@ -1,7 +1,8 @@
 package com.instaclustr.backup.uploader;
 
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
+import com.instaclustr.backup.BackupArguments;
+import com.instaclustr.backup.common.LocalFileObjectReference;
+import com.instaclustr.backup.common.RemoteObjectReference;
 
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -12,17 +13,9 @@ public class LocalFileSnapShotUploader extends SnapshotUploader {
 
     private final Path backupRoot;
 
-    @AssistedInject
-    public LocalFileSnapShotUploader (@Assisted final Path backupRoot) {
+    public LocalFileSnapShotUploader (final Path backupRoot, final BackupArguments backupArguments) {
+        super(backupArguments.clusterId, backupArguments.backupId, backupArguments.backupBucket);
         this.backupRoot = backupRoot;
-    }
-
-    static class LocalFileObjectReference implements RemoteObjectReference {
-        private final Path objectKey;
-
-        public LocalFileObjectReference(final Path objectKey) {
-            this.objectKey = objectKey;
-        }
     }
 
     @Override

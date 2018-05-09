@@ -9,7 +9,6 @@ import com.instaclustr.backup.BackupArguments;
 import com.instaclustr.backup.BackupException;
 import com.instaclustr.backup.jmx.CassandraObjectNames;
 import com.instaclustr.backup.uploader.FilesUploader;
-import com.instaclustr.backup.util.CloudDownloadUploadFactory;
 import com.instaclustr.backup.util.Directories;
 import com.instaclustr.backup.util.GlobalLock;
 import com.microsoft.azure.storage.StorageException;
@@ -30,10 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
@@ -130,7 +126,7 @@ public class BackupTask implements Callable<Void> {
     }
 
     @VisibleForTesting
-    public static Collection<ManifestEntry> generateManifest(final List<String> keyspaces,
+    public Collection<ManifestEntry> generateManifest(final List<String> keyspaces,
                                                       final String tag,
                                                       final Path cassandraDataDirectory) throws IOException {
         // find files belonging to snapshot
@@ -140,7 +136,7 @@ public class BackupTask implements Callable<Void> {
         if (keyspaceColumnFamilySnapshots == null) {
             if (!keyspaces.isEmpty()) {
                 logger.warn("No keyspace column family snapshot directories were found for snapshot \"{}\" of {}", tag, Joiner.on(",").join(keyspaces));
-                return ImmutableList.of();
+                return new LinkedList<>();
             }
 
             // There should at least be system keyspace tables
@@ -152,7 +148,7 @@ public class BackupTask implements Callable<Void> {
 
         // add snapshot files to the manifest
         for (final KeyspaceColumnFamilySnapshot keyspaceColumnFamilySnapshot : keyspaceColumnFamilySnapshots) {
-            final Path bucketKey = cassandraDataDirectory.resolve(Paths.get(keyspaceColumnFamilySnapshot.keyspace, keyspaceColumnFamilySnapshot.columnFamily));
+            final Path bucketKey = Paths.get(Directories.CASSANDRA_DATA).resolve(Paths.get(keyspaceColumnFamilySnapshot.keyspace, keyspaceColumnFamilySnapshot.columnFamily));
             Iterables.addAll(manifest, ssTableManifest(keyspaceColumnFamilySnapshot.snapshotDirectory, bucketKey));
         }
 
@@ -176,7 +172,7 @@ public class BackupTask implements Callable<Void> {
     }
 
     private void tryBackup() throws Exception {
-        List<String> tokens = ImmutableList.of();
+        List<String> tokens = new ArrayList<>();
         if (arguments.offlineSnapshot) {
             doUpload(tokens);
         } else {
