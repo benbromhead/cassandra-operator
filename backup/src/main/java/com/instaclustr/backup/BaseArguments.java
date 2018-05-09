@@ -22,7 +22,7 @@ public abstract class BaseArguments {
         this.stream = stream;
     }
 
-    void parseArguments(String[] args) {
+    public void parseArguments(String[] args) {
         try {
             this.parser = new CmdLineParser(this, ParserProperties.defaults().withUsageWidth(120).withOptionSorter(null));
             this.parser.parseArgument(args);

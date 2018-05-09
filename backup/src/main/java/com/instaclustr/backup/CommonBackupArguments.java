@@ -40,11 +40,15 @@ public abstract class CommonBackupArguments extends BaseArguments {
     }
 
     @Override
-    void parseArguments(String[] args) {
+    public void parseArguments(String[] args) {
         super.parseArguments(args);
 
         if (this.bandwidth == null && this.speed == null) {
             this.speed = CommonBackupArguments.Speed.FAST;
+        }
+
+        if (this.offlineSnapshot == null) {
+            this.offlineSnapshot = false;
         }
 
         // use the specified speed
@@ -94,17 +98,18 @@ public abstract class CommonBackupArguments extends BaseArguments {
     @Nullable
     public DataRate bandwidth;
 
-    @Option(name = "-j", aliases = {"--jmx"}, usage = "JMX service url for Cassandra", metaVar = "jmx-url", handler = JMXUrlOptionHandler.class, required = true)
+    @Option(name = "-j", aliases = {"--jmx"}, usage = "JMX service url for Cassandra", metaVar = "jmx-url", handler = JMXUrlOptionHandler.class, forbids = "--offline")
     public JMXServiceURL jmxServiceURL;
-
-
-    //arguments.backupID, arguments.clusterID, arguments.backupBucket,
 
     @Option(name = "--bucket", aliases = {"--backup-bucket"}, usage = "Container or bucket to store backups in", metaVar = "bucket_name")
     public String backupBucket;
 
     @Option(name = "--id", aliases = {"--backup-id"}, usage = "Cassandra backup id", metaVar = "cassandra-2")
     public String backupId;
+
+    @Option(name = "--offline", usage = "Cassandra is not running (won't use JMX to snapshot, no token lists uploaded)", metaVar = "false", forbids = "-j")
+    public Boolean offlineSnapshot;
+
 
 
 }

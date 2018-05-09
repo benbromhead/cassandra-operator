@@ -27,8 +27,7 @@ public class BackupApplication extends Application{
                 new AbstractScheduledService() {
                     @Override
                     protected void runOneIteration() throws Exception {
-                        //TODO: arguments, arguments, arguments, arguments
-                        new BackupTask(new FilesUploader(CloudDownloadUploadFactory.getUploader(arguments), arguments), arguments, globalLock).call();
+                        new BackupTask(arguments, globalLock).call();
                     }
 
                     @Override

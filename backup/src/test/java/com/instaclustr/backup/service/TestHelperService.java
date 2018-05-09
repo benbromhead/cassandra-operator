@@ -1,5 +1,7 @@
 package com.instaclustr.backup.service;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.LoggerFactory;
 
@@ -12,12 +14,13 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class TestHelperService {
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(TestHelperService.class);
 
     public void setupTempDirectories(Map<String, Path> tempDirectories) throws IOException, URISyntaxException {
-        tempDirectories.forEach((name, path) -> {
+        ImmutableSet.copyOf(tempDirectories.keySet()).stream().forEach(name -> {
             try {
                 Iterator<String> folderIterator = Arrays.asList(name.split("/")).iterator();
 

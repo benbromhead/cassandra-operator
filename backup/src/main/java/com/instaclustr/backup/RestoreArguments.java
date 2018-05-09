@@ -21,7 +21,7 @@ public class RestoreArguments extends BaseArguments {
     @Option(name = "-bi", aliases = {"--com.instaclustr.backup-id"}, metaVar = "com.instaclustr.backup ID", usage = "Backup ID to restore from. Normally just the source nodeID, but if the node has replaced another node might be previous nodeID.", required = true)
     public String sourceBackupID;
 
-    @Option(name = "-cdc", aliases = {"--cluster-data-centre"}, metaVar = "cluster data centre ID", usage = "Parent cluster data centre of node to restore from.", required = true)
+    @Option(name = "-cdc", aliases = {"--cluster-data-centre"}, metaVar = "cluster data centre ID", usage = "Parent cluster data centre of node to restore from.")
     public String clusterDataCentreId;
 
     @Option(name = "-c", aliases = {"--cluster"}, metaVar = "cluster ID", usage = "Parent cluster of node to restore from.", required = true)
@@ -37,10 +37,10 @@ public class RestoreArguments extends BaseArguments {
     @Nullable
     public Multimap<String, String> keyspaceTables;
 
-    @Option(name = "-ts", aliases = {"--timestamp-start"}, metaVar = "Milliseconds since epoch", usage = "When the base snapshot was taken. Only relevant if archived commitlogs are available.", required = true)
+    @Option(name = "-ts", aliases = {"--timestamp-start"}, metaVar = "Milliseconds since epoch", usage = "When the base snapshot was taken. Only relevant if archived commitlogs are available.", required = false)
     public long timestampStart;
 
-    @Option(name = "-te", aliases = {"--timestamp-end"}, metaVar = "Milliseconds since epoch", usage = "Point-in-time to restore up to. Only relevant if archived commitlogs are available.", required = true)
+    @Option(name = "-te", aliases = {"--timestamp-end"}, metaVar = "Milliseconds since epoch", usage = "Point-in-time to restore up to. Only relevant if archived commitlogs are available.", required = false)
     public long timestampEnd;
 
     @Option(name = "-rs", aliases = {"--restore-system-keyspace"}, usage = "Restore system keyspace. Use this to prevent bootstrapping, when restoring on only a single node.")

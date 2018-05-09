@@ -166,7 +166,7 @@ public class RestoreTask implements Callable<Void> {
                 final String[] lineArray = m.trim().split(" ");
 
                 final Path manifestPath = Paths.get(lineArray[1]);
-                final Path localPath = cassandraDataDirectory.resolve(manifestPath.subpath(0, 3).resolve(manifestPath.getFileName())); //ditch the hash
+                final Path localPath = cassandraDataDirectory.resolve(manifestPath.subpath(0, 3).resolve(manifestPath.getFileName())); //strip check hash from path
 
                 if (localPath.toFile().exists() && BackupTask.sstableHash(localPath).equals(manifestPath.getName(3).toString())) {
                     logger.info("Keeping existing sstable " + localPath);

@@ -106,27 +106,6 @@ public class RestoreTaskTest {
         });
     }
 
-    @Test(description = "If .payload-locked present, then halt restore.", expectedExceptions = IOException.class)
-    public void checkPayloadLocked() throws Exception {
-        Files.createFile(payloadLocked);
-        final RestoreArguments arguments = new RestoreArguments("cassandra-restore", null);
-        Multimap<String, String> keyspaceTableSubset = HashMultimap.create();
-
-        try {
-            new RestoreTask(new LocalFileDownloader(tempDirs.get("dummyRemoteSource"), restoreFromNodeId),
-                    tempDirs.get("data"),
-                    tempDirs.get("etc/cassandra"),
-                    tempDirs.get("sharedContainerRoot"),
-                    new GlobalLock(tempDirs.get("sharedContainerRoot").toString()),
-                    arguments,
-                    HashMultimap.create()).call();
-
-        } catch (IOException e) {
-            Files.deleteIfExists(payloadLocked);
-            throw e;
-        }
-    }
-
     @Test(description = "Full restore to an existing cluster")
     public void basicRestore() throws Exception {
         final RestoreArguments restoreArguments = new RestoreArguments("cassandra-restore", null);

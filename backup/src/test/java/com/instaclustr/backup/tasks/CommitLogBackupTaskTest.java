@@ -74,7 +74,7 @@ public class CommitLogBackupTaskTest {
         assertTrue(expectedCommitLogs.size() > 0);
 
         //TODO: commitLogBackupArguments), commitLogBackupArguments), commitLogBackupArguments
-        new CommitLogBackupTask(rootDir, defaultCommitLogArchive, mockGlobalLock, new FilesUploader(CloudDownloadUploadFactory.getUploader(commitLogBackupArguments), commitLogBackupArguments), commitLogBackupArguments).call();
+        new CommitLogBackupTask(rootDir, defaultCommitLogArchive, mockGlobalLock, new FilesUploader(commitLogBackupArguments), commitLogBackupArguments).call();
 
         logger.info("Assert backup directory exists");
         final File backupDirectory = rootDir.resolve(Directories.CASSANDRA_COMMIT_LOGS).toFile();

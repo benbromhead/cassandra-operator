@@ -29,7 +29,7 @@ public class CommitLogBackupApplication extends Application {
                         new CommitLogBackupTask(arguments.sharedContainerPath,
                                 arguments.commitLogArchiveOverride,
                                 null,
-                                new FilesUploader(CloudDownloadUploadFactory.getUploader(arguments), arguments),
+                                new FilesUploader(arguments),
                                 arguments).call();
 
                         logger.info("CommitLog Backup completed successfully.");

@@ -6,15 +6,19 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.RateLimiter;
 import com.instaclustr.backup.CommonBackupArguments;
 import com.instaclustr.backup.task.ManifestEntry;
+import com.instaclustr.backup.util.CloudDownloadUploadFactory;
 import com.instaclustr.backup.util.DataRate;
 import com.instaclustr.backup.util.DataSize;
 import com.instaclustr.backup.util.SeekableByteChannelInputStream;
+import com.microsoft.azure.storage.StorageException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.naming.ConfigurationException;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.Collection;
@@ -63,12 +67,8 @@ public class FilesUploader {
         }
     }
 
-    public FilesUploader(final SnapshotUploader fileUploadProvider,
-//                         final MetricRegistry metricRegistry,
-                         final CommonBackupArguments arguments) {
-
-        this.snapshotUploaderProvider = fileUploadProvider;
-//        this.uploadThroughputMeter = metricRegistry.meter("upload-throughput");
+    public FilesUploader(final CommonBackupArguments arguments) throws StorageException, ConfigurationException, URISyntaxException {
+        this.snapshotUploaderProvider = CloudDownloadUploadFactory.getUploader(arguments);
         this.arguments = arguments;
     }
 
