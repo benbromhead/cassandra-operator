@@ -11,7 +11,6 @@ import com.instaclustr.backup.task.ManifestEntry;
 import com.instaclustr.backup.task.RestoreTask;
 import com.instaclustr.backup.util.Directories;
 import com.instaclustr.backup.util.GlobalLock;
-import org.apache.commons.io.FileUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -79,19 +78,6 @@ public class BackupTaskTest {
                 .collect(Collectors.toList());
     }
 
-    private void testBackupRefresh(final BackupArguments backupArguments, final RestoreArguments restoreArguments, final TestFileConfig testFileConfig) throws Exception {
-        final Path sharedContainerRoot = backupArguments.sharedContainerPath;
-        new BackupTask(backupArguments, new GlobalLock(sharedContainerRoot.toString())).call();
-        final String keyspace = "keyspace1";
-        final String table1 = "table1";
-        backupArguments.snapshotTag = "newSnap";
-
-        TestHelperService.createSSTable(sharedContainerRoot.resolve(Directories.CASSANDRA_DATA), keyspace, table1, 100, testFileConfig, false, backupArguments.snapshotTag);
-        TestHelperService.createSSTable(sharedContainerRoot.resolve(Directories.CASSANDRA_DATA), keyspace, table1, 101, testFileConfig, false, backupArguments.snapshotTag);
-
-
-        new BackupTask(backupArguments, new GlobalLock(sharedContainerRoot.toString())).call();
-    }
 
     private void testBackupAndRestore(final BackupArguments backupArguments, final RestoreArguments restoreArguments, final TestFileConfig testFileConfig) throws Exception {
             final Path sharedContainerRoot = backupArguments.sharedContainerPath;
