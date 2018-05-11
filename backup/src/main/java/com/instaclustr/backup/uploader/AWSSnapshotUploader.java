@@ -109,7 +109,7 @@ public class AWSSnapshotUploader extends SnapshotUploader {
     void cleanup() throws Exception {
         try {
             // TODO cleanupMultipartUploads gets access denied, INS-2326 is meant to fix this
-//            cleanupMultipartUploads();
+            cleanupMultipartUploads();
 
         } catch (Exception e) {
             logger.warn("Failed to cleanup multipart uploads.", e);

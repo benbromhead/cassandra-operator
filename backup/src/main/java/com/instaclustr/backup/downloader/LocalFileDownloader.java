@@ -1,11 +1,13 @@
 package com.instaclustr.backup.downloader;
 
+import com.google.common.collect.ImmutableList;
 import com.instaclustr.backup.RestoreArguments;
 import com.instaclustr.backup.common.LocalFileObjectReference;
 import com.instaclustr.backup.common.RemoteObjectReference;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -17,17 +19,17 @@ public class LocalFileDownloader extends Downloader {
 
     public LocalFileDownloader(final RestoreArguments arguments) {
         super(arguments);
-        this.sourceDirectory = Paths.get(arguments.backupBucket);
+        this.sourceDirectory = arguments.fileBackupDirectory;
     }
 
     @Override
     public RemoteObjectReference objectKeyToRemoteReference(final Path objectKey) throws Exception {
-        return new LocalFileObjectReference(objectKey);
+        return new LocalFileObjectReference(objectKey, resolveRemotePath(objectKey));
     }
 
     @Override
     public void downloadFile(final Path localFilePath, final RemoteObjectReference object) throws Exception {
-        Path remoteFilePath = Paths.get(((LocalFileObjectReference) object).canonicalPath);
+        Path remoteFilePath = sourceDirectory.resolve(Paths.get(((LocalFileObjectReference) object).canonicalPath));
 
         File localFileDirectory = localFilePath.getParent().toFile();
         if (!localFileDirectory.exists())
@@ -38,19 +40,23 @@ public class LocalFileDownloader extends Downloader {
 
     @Override
     public List<RemoteObjectReference> listFiles(final RemoteObjectReference prefix) throws Exception {
-        final LocalFileObjectReference localFileObjectReference = (LocalFileObjectReference) prefix;
+        try {
+            final LocalFileObjectReference localFileObjectReference = (LocalFileObjectReference) prefix;
 
-        final List<RemoteObjectReference> remoteObjectReferenceList = new ArrayList<>();
+            final List<RemoteObjectReference> remoteObjectReferenceList = new ArrayList<>();
 
-        List<Path> pathsList = Files.walk(Paths.get(localFileObjectReference.canonicalPath))
-                .filter(filePath -> Files.isRegularFile(filePath))
-                .collect(Collectors.toList());
+            List<Path> pathsList = Files.walk(sourceDirectory.resolve(localFileObjectReference.canonicalPath))
+                    .filter(filePath -> Files.isRegularFile(filePath))
+                    .collect(Collectors.toList());
 
-        for (Path path : pathsList) {
-            remoteObjectReferenceList.add(objectKeyToRemoteReference(sourceDirectory.resolve(restoreFromNodeId).relativize(path)));
+            for (Path path : pathsList) {
+                remoteObjectReferenceList.add(objectKeyToRemoteReference(sourceDirectory.resolve(restoreFromNodeId).relativize(path)));
+            }
+
+            return remoteObjectReferenceList;
+        } catch (NoSuchFileException e) {
+            return new ArrayList<>(); //No commitlog dir or files, so ignore (may need to throw exception?)
         }
-
-        return remoteObjectReferenceList;
     }
 
     @Override

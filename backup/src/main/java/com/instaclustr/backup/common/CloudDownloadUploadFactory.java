@@ -15,6 +15,7 @@ import com.microsoft.azure.storage.blob.CloudBlobClient;
 
 import javax.naming.ConfigurationException;
 import java.net.URISyntaxException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public class CloudDownloadUploadFactory {
@@ -47,7 +48,7 @@ public class CloudDownloadUploadFactory {
             case GCP_BLOB:
                 return new GCPSnapshotUploader(getGCPStorageClient(), arguments);
             case FILE:
-                return new LocalFileSnapShotUploader(Paths.get(arguments.backupBucket), arguments); //TODO: fix doco
+                return new LocalFileSnapShotUploader(arguments);
         }
         throw new ConfigurationException("Could not create Snapshot Uploader");
     }

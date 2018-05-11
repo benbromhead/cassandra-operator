@@ -79,6 +79,12 @@ public abstract class BaseArguments {
     @Nullable
     public Path cassandraDirectory;
 
+
+    //TODO: Allow user to override commitlog directory (some environments may allow different disks which better suit commitlog performance
+    @Option(name = "--fl", aliases = {"--filebackup-location"}, usage = "Base directory destination for filesystem based backups", metaVar = "/backups", handler = PathOptionHandler.class)
+    @Nullable
+    public Path fileBackupDirectory;
+
     //TODO: Allow user to override commitlog directory (some environments may allow different disks which better suit commitlog performance
     @Option(name = "--cd", aliases = {"--config-directory"}, usage = "Base directory that contains the Cassandra data, cache and commitlog directories", metaVar = "/cassandra", handler = PathOptionHandler.class)
     @Nullable
