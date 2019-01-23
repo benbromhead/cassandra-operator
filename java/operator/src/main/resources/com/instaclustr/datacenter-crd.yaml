@@ -31,6 +31,7 @@ spec:
           - imagePullPolicy
           - prometheusSupport
           - privilegedSupported
+          - ingressNode
           properties:
             name:
               type: string
@@ -75,4 +76,6 @@ spec:
             privilegedSupported:
               type: boolean
               description: Attempt to run privileged configuration options for better performance.
-            
+            ingressNode:
+              type: integer
+              description: Run a Cassandra 'proxy' node with a published port to receive external client requests

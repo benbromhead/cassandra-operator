@@ -42,6 +42,7 @@ public class DataCenterReconciliationController {
     private final DataCenterSpec dataCenterSpec;
 
     private final Map<String, String> dataCenterLabels;
+    private final Map<String, String> ingressDataCenterLabels;
 
     @Inject
     public DataCenterReconciliationController(final CoreV1Api coreApi,
@@ -60,6 +61,10 @@ public class DataCenterReconciliationController {
         this.dataCenterSpec = dataCenter.getSpec();
 
         this.dataCenterLabels = ImmutableMap.of("cassandra-datacenter", dataCenterMetadata.getName(), "operator", "instaclustr-cassandra-operator"); //hard code an indentifier for DCs created by this operator
+        this.ingressDataCenterLabels = ImmutableMap.of(
+                "cassandra-datacenter", dataCenterMetadata.getName(),
+                "operator", "instaclustr-cassandra-operator",
+                "cassandraIngressNode", "true");
     }
 
     public void reconcileDataCenter() throws Exception {
@@ -74,7 +79,7 @@ public class DataCenterReconciliationController {
         {
             final ImmutableList.Builder<ConfigMapVolumeMount> builder = ImmutableList.builder();
 
-            builder.add(createOrReplaceOperatorConfigMap(seedNodesService));
+            builder.add(createOrReplaceOperatorConfigMap(seedNodesService, false));
 
             if (dataCenterSpec.getUserConfigMapVolumeSource() != null) {
                 builder.add(new ConfigMapVolumeMount("user-config-volume", "/tmp/user-config", dataCenterSpec.getUserConfigMapVolumeSource()));
@@ -91,6 +96,24 @@ public class DataCenterReconciliationController {
         if (dataCenterSpec.getPrometheusSupport()) {
             createOrReplacePrometheusServiceMonitor();
         }
+
+        if(dataCenterSpec.getIngressNode() > 0) {
+            final List<ConfigMapVolumeMount> ingressConfigMapVolumeMounts;
+            {
+                final ImmutableList.Builder<ConfigMapVolumeMount> builder = ImmutableList.builder();
+
+                builder.add(createOrReplaceOperatorConfigMap(seedNodesService, true));
+
+                if (dataCenterSpec.getUserConfigMapVolumeSource() != null) {
+                    builder.add(new ConfigMapVolumeMount("user-config-volume", "/tmp/user-config", dataCenterSpec.getUserConfigMapVolumeSource()));
+                }
+
+                ingressConfigMapVolumeMounts = builder.build();
+            }
+
+            createOrReplaceIngressNodeDeploymentSet(ingressConfigMapVolumeMounts, dataCenterSpec.getUserSecretVolumeSource());
+        }
+
     }
 
     private String dataCenterChildObjectName(final String nameFormat) {
@@ -117,110 +140,11 @@ public class DataCenterReconciliationController {
     }
 
     private void createOrReplaceStateNodesStatefulSet(final Iterable<ConfigMapVolumeMount> configMapVolumeMounts, final V1SecretVolumeSource secretVolumeSource) throws ApiException {
-        final V1Container cassandraContainer = new V1Container()
-                .name("cassandra")
-                .image(dataCenterSpec.getCassandraImage())
-                .imagePullPolicy(dataCenterSpec.getImagePullPolicy())
-                .addPortsItem(new V1ContainerPort().name("internode").containerPort(7000))
-                .addPortsItem(new V1ContainerPort().name("cql").containerPort(9042))
-                .addPortsItem(new V1ContainerPort().name("jmx").containerPort(7199))
-                .resources(dataCenterSpec.getResources())
-                .securityContext(new V1SecurityContext().capabilities(new V1Capabilities().add(ImmutableList.of(
-                        "IPC_LOCK",
-                        "SYS_RESOURCE"
-                ))))
-                .readinessProbe(new V1Probe()
-                        .exec(new V1ExecAction().addCommandItem("/usr/bin/readiness-probe"))
-                        .initialDelaySeconds(60)
-                        .timeoutSeconds(5)
-                )
-                .addVolumeMountsItem(new V1VolumeMount()
-                        .name("data-volume")
-                        .mountPath("/var/lib/cassandra")
-                )
-                .addVolumeMountsItem(new V1VolumeMount()
-                        .name("pod-info")
-                        .mountPath("/etc/podinfo")
-                );
+        final V1Container cassandraContainer = makeCassandraContainer(configMapVolumeMounts, secretVolumeSource);
 
-        if (dataCenterSpec.getPrometheusSupport()) {
-            cassandraContainer.addPortsItem(new V1ContainerPort().name("prometheus").containerPort(9500));
-        }
+        final V1Container sidecarContainer = makeSidecarContainer(configMapVolumeMounts, secretVolumeSource);
 
-
-        final V1Container sidecarContainer = new V1Container()
-                .name("sidecar")
-                .env(dataCenterSpec.getEnv())
-                .image(dataCenterSpec.getSidecarImage())
-                .imagePullPolicy(dataCenterSpec.getImagePullPolicy())
-                .addPortsItem(new V1ContainerPort().name("http").containerPort(4567))
-                .addVolumeMountsItem(new V1VolumeMount()
-                        .name("data-volume")
-                        .mountPath("/var/lib/cassandra")
-                );
-
-
-        final V1PodSpec podSpec = new V1PodSpec()
-                .addInitContainersItem(fileLimitInit())
-                .addContainersItem(cassandraContainer)
-                .addContainersItem(sidecarContainer)
-                .addVolumesItem(new V1Volume()
-                        .name("pod-info")
-                        .downwardAPI(new V1DownwardAPIVolumeSource()
-                                .addItemsItem(new V1DownwardAPIVolumeFile()
-                                        .path("labels")
-                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.labels"))
-                                )
-                                .addItemsItem(new V1DownwardAPIVolumeFile()
-                                        .path("annotations")
-                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.annotations"))
-                                )
-                                .addItemsItem(new V1DownwardAPIVolumeFile()
-                                        .path("namespace")
-                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.namespace"))
-                                )
-                                .addItemsItem(new V1DownwardAPIVolumeFile()
-                                        .path("name")
-                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.name"))
-                                )
-                        )
-                );
-
-
-
-        // add configmap volumes
-        for (final ConfigMapVolumeMount configMapVolumeMount : configMapVolumeMounts) {
-            cassandraContainer.addVolumeMountsItem(new V1VolumeMount()
-                    .name(configMapVolumeMount.name)
-                    .mountPath(configMapVolumeMount.mountPath)
-            );
-
-            //provide access to config map volumes in the sidecar, these reside in /tmp though and are not overlayed into /etc/cassandra
-            sidecarContainer.addVolumeMountsItem(new V1VolumeMount()
-                    .name(configMapVolumeMount.name)
-                    .mountPath(configMapVolumeMount.mountPath));
-
-            // the Cassandra container entrypoint overlays configmap volumes
-            cassandraContainer.addArgsItem(configMapVolumeMount.mountPath);
-
-            podSpec.addVolumesItem(new V1Volume()
-                    .name(configMapVolumeMount.name)
-                    .configMap(configMapVolumeMount.volumeSource)
-            );
-        }
-
-        if (secretVolumeSource != null) {
-            cassandraContainer.addVolumeMountsItem(new V1VolumeMount()
-                    .name("user-secret-volume")
-                    .mountPath("/tmp/user-secret-config"));
-
-            podSpec.addVolumesItem(new V1Volume()
-                    .name("user-secret-volume")
-                    .secret(secretVolumeSource)
-            );
-        }
-
-
+        final V1PodSpec podSpec = makeCassandraPodSpec(cassandraContainer, sidecarContainer, configMapVolumeMounts, secretVolumeSource);
 
         if (dataCenterSpec.getRestoreFromBackup() != null) {
 
@@ -282,6 +206,150 @@ public class DataCenterReconciliationController {
         );
     }
 
+    private V1Container makeCassandraContainer(final Iterable<ConfigMapVolumeMount> configMapVolumeMounts, final V1SecretVolumeSource secretVolumeSource) {
+        V1Container container  = new V1Container()
+                .name("cassandra")
+                .image(dataCenterSpec.getCassandraImage())
+                .imagePullPolicy(dataCenterSpec.getImagePullPolicy())
+                .addPortsItem(new V1ContainerPort().name("internode").containerPort(7000))
+                .addPortsItem(new V1ContainerPort().name("cql").containerPort(9042))
+                .addPortsItem(new V1ContainerPort().name("jmx").containerPort(7199))
+                .resources(dataCenterSpec.getResources())
+                .securityContext(new V1SecurityContext().capabilities(new V1Capabilities().add(ImmutableList.of(
+                        "IPC_LOCK",
+                        "SYS_RESOURCE"
+                ))))
+                .readinessProbe(new V1Probe()
+                        .exec(new V1ExecAction().addCommandItem("/usr/bin/readiness-probe"))
+                        .initialDelaySeconds(60)
+                        .timeoutSeconds(5)
+                )
+                .addVolumeMountsItem(new V1VolumeMount()
+                        .name("data-volume")
+                        .mountPath("/var/lib/cassandra")
+                )
+                .addVolumeMountsItem(new V1VolumeMount()
+                        .name("pod-info")
+                        .mountPath("/etc/podinfo")
+                );
+
+        if (dataCenterSpec.getPrometheusSupport()) {
+            container.addPortsItem(new V1ContainerPort().name("prometheus").containerPort(9500));
+        }
+
+        for (final ConfigMapVolumeMount configMapVolumeMount : configMapVolumeMounts) {
+            container.addVolumeMountsItem(new V1VolumeMount()
+                    .name(configMapVolumeMount.name)
+                    .mountPath(configMapVolumeMount.mountPath)
+            );
+            // the Cassandra container entrypoint overlays configmap volumes
+            container.addArgsItem(configMapVolumeMount.mountPath);
+
+        }
+
+        if (secretVolumeSource != null) {
+            container.addVolumeMountsItem(new V1VolumeMount()
+                    .name("user-secret-volume")
+                    .mountPath("/tmp/user-secret-config"));
+        }
+
+
+        return container;
+    }
+
+    private V1Container makeSidecarContainer(final Iterable<ConfigMapVolumeMount> configMapVolumeMounts, final V1SecretVolumeSource secretVolumeSource) {
+        V1Container container = new V1Container()
+                .name("sidecar")
+                .env(dataCenterSpec.getEnv())
+                .image(dataCenterSpec.getSidecarImage())
+                .imagePullPolicy(dataCenterSpec.getImagePullPolicy())
+                .addPortsItem(new V1ContainerPort().name("http").containerPort(4567))
+                .addVolumeMountsItem(new V1VolumeMount()
+                        .name("data-volume")
+                        .mountPath("/var/lib/cassandra")
+                );
+
+        // add configmap volumes
+        for (final ConfigMapVolumeMount configMapVolumeMount : configMapVolumeMounts) {
+            //provide access to config map volumes in the sidecar, these reside in /tmp though and are not overlayed into /etc/cassandra
+            container.addVolumeMountsItem(new V1VolumeMount()
+                    .name(configMapVolumeMount.name)
+                    .mountPath(configMapVolumeMount.mountPath));
+
+        }
+        return container;
+    }
+
+    private V1PodSpec makeCassandraPodSpec(final V1Container cassandra, final V1Container sidecar, final Iterable<ConfigMapVolumeMount> configMapVolumeMounts, final V1SecretVolumeSource secretVolumeSource) {
+        final V1PodSpec podSpec = new V1PodSpec()
+                .addInitContainersItem(fileLimitInit())
+                .addContainersItem(cassandra)
+                .addContainersItem(sidecar)
+                .addVolumesItem(new V1Volume()
+                        .name("pod-info")
+                        .downwardAPI(new V1DownwardAPIVolumeSource()
+                                .addItemsItem(new V1DownwardAPIVolumeFile()
+                                        .path("labels")
+                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.labels"))
+                                )
+                                .addItemsItem(new V1DownwardAPIVolumeFile()
+                                        .path("annotations")
+                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.annotations"))
+                                )
+                                .addItemsItem(new V1DownwardAPIVolumeFile()
+                                        .path("namespace")
+                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.namespace"))
+                                )
+                                .addItemsItem(new V1DownwardAPIVolumeFile()
+                                        .path("name")
+                                        .fieldRef(new V1ObjectFieldSelector().fieldPath("metadata.name"))
+                                )
+                        )
+                );
+        // add configmap volumes
+        for (final ConfigMapVolumeMount configMapVolumeMount : configMapVolumeMounts) {
+            podSpec.addVolumesItem(new V1Volume()
+                    .name(configMapVolumeMount.name)
+                    .configMap(configMapVolumeMount.volumeSource)
+            );
+        }
+
+        if (secretVolumeSource != null) {
+            podSpec.addVolumesItem(new V1Volume()
+                    .name("user-secret-volume")
+                    .secret(secretVolumeSource)
+            );
+        }
+        return podSpec;
+
+    }
+
+    private void createOrReplaceIngressNodeDeploymentSet(final Iterable<ConfigMapVolumeMount> configMapVolumeMounts, final V1SecretVolumeSource secretVolumeSource) throws ApiException {
+        final V1Container cassandraContainer = makeCassandraContainer(configMapVolumeMounts, secretVolumeSource);
+
+        final V1Container sidecarContainer = makeSidecarContainer(configMapVolumeMounts, secretVolumeSource);
+
+        final V1PodSpec podSpec = makeCassandraPodSpec(cassandraContainer, sidecarContainer, configMapVolumeMounts, secretVolumeSource);
+
+        final V1beta2Deployment deployment = new V1beta2Deployment()
+                .metadata(dataCenterChildObjectMetadata("%s"))
+                .spec(new V1beta2DeploymentSpec()
+                        .selector(new V1LabelSelector().matchLabels(ingressDataCenterLabels))
+                        .replicas(dataCenterSpec.getIngressNode())
+                        .template(new V1PodTemplateSpec()
+                                .metadata(new V1ObjectMeta().labels(ingressDataCenterLabels))
+                                .spec(podSpec)
+                        )
+                );
+
+        // if the Deployment doesn't exist, create it. Otherwise scale it safely (ingress nodes are stateless in this case)
+        K8sResourceUtils.createOrReplaceResource(
+                () -> appsApi.createNamespacedDeployment(deployment.getMetadata().getNamespace(), deployment, null),
+                () -> appsApi.replaceNamespacedDeployment(deployment.getMetadata().getName(), deployment.getMetadata().getNamespace(), deployment, null)
+
+        );
+    }
+
     private V1Container fileLimitInit() {
         return new V1Container()
                 .securityContext(new V1SecurityContext().privileged(dataCenterSpec.getPrivilegedSupported()))
@@ -307,7 +375,7 @@ public class DataCenterReconciliationController {
     private static final long MB = 1024 * 1024;
     private static final long GB = MB * 1024;
 
-    private ConfigMapVolumeMount createOrReplaceOperatorConfigMap(final V1Service seedNodesService) throws IOException, ApiException {
+    private ConfigMapVolumeMount createOrReplaceOperatorConfigMap(final V1Service seedNodesService, final Boolean ingressNode) throws IOException, ApiException {
         final V1ConfigMap configMap = new V1ConfigMap()
                 .metadata(dataCenterChildObjectMetadata("%s-operator-config"));
 
@@ -353,6 +421,12 @@ public class DataCenterReconciliationController {
         if (dataCenterSpec.getPrometheusSupport()) {
             configMapVolumeAddFile(configMap, volumeSource, "cassandra-env.sh.d/001-cassandra-exporter.sh",
                     "JVM_OPTS=\"${JVM_OPTS} -javaagent:${CASSANDRA_HOME}/agents/cassandra-exporter-agent.jar=@${CASSANDRA_CONF}/cassandra-exporter.conf\"");
+        }
+
+        if(ingressNode) {
+            configMapVolumeAddFile(configMap, volumeSource, "cassandra-env.sh.d/001-cassandra-ingress.sh",
+                    "JVM_OPTS=\"${JVM_OPTS} -Djoin_ring=false\"");
+
         }
 
         //Tune limits
@@ -414,6 +488,7 @@ public class DataCenterReconciliationController {
                 // OOM Error handling
                 printer.println("-XX:+HeapDumpOnOutOfMemoryError");
                 printer.println("-XX:+CrashOnOutOfMemoryError");
+
             }
 
             configMapVolumeAddFile(configMap, volumeSource, "jvm.options.d/001-jvm-memory-gc.options", writer.toString());
@@ -428,17 +503,38 @@ public class DataCenterReconciliationController {
         return new ConfigMapVolumeMount("operator-config-volume", "/tmp/operator-config", volumeSource);
     }
 
-    private V1Service createOrReplaceSeedNodesService() throws ApiException {
+    private V1Service createOrReplaceIngressNodesService() throws ApiException {
         final V1Service service = new V1Service()
-                .metadata(dataCenterChildObjectMetadata("%s-seeds")
+                .metadata(dataCenterChildObjectMetadata("%s-ingress")
                         // tolerate-unready-endpoints - allow the seed provider can discover the other seeds (and itself) before the readiness-probe gives the green light
-                        .putAnnotationsItem("service.alpha.kubernetes.io/tolerate-unready-endpoints", "true")
+                        .putAnnotationsItem("service.alpha.kubernetes.io/tolerate-unready-endpoints", "false")
                 )
                 .spec(new V1ServiceSpec()
                         .publishNotReadyAddresses(true)
                         .clusterIP("None")
                         // a port needs to be defined for the service to be resolvable (#there-was-a-bug-ID-and-now-I-cant-find-it)
                         .ports(ImmutableList.of(new V1ServicePort().name("internode").port(7000)))
+                        .selector(dataCenterLabels)
+                );
+
+        k8sResourceUtils.createOrReplaceNamespaceService(service);
+
+        return service;
+    }
+
+
+    private V1Service createOrReplaceSeedNodesService() throws ApiException {
+        final V1Service service = new V1Service()
+                .metadata(dataCenterChildObjectMetadata("%s-ingress")
+                        // tolerate-unready-endpoints - allow the seed provider can discover the other seeds (and itself) before the readiness-probe gives the green light
+                        .putAnnotationsItem("service.alpha.kubernetes.io/tolerate-unready-endpoints", "true")
+                )
+                .spec(new V1ServiceSpec()
+                        .publishNotReadyAddresses(true)
+                        .type("NodePort")
+//                        .clusterIP("None")
+                        // a port needs to be defined for the service to be resolvable (#there-was-a-bug-ID-and-now-I-cant-find-it)
+                        .ports(ImmutableList.of(new V1ServicePort().name("ingress").port(9042).nodePort(309042)))
                         .selector(dataCenterLabels)
                 );
 

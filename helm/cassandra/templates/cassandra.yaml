@@ -32,3 +32,4 @@ spec:
 {{- end }}
   prometheusSupport: {{ .Values.prometheusEnabled }}
   privilegedSupported: {{ .Values.privilegedSupported }}
+  ingressNode: {{ .Values.ingressNodeEnabled }}

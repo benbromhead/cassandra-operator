@@ -78,6 +78,11 @@
         "privilegedSupported": {
           "type": "boolean",
           "description": "Attempt to run privileged configuration options for better performance"
+        },
+        "ingressNode": {
+          "type": "number",
+          "javaType": "int",
+          "description": "Run a Cassandra 'proxy' node with a published port to receive external client requests"
         }
       }
     }
