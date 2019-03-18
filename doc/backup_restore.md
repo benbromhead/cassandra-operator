@@ -226,3 +226,30 @@ spec:
 The new cluster will download the sstables from the existing backup before starting Cassandra and restore the tokens associated with the node the backup was taken on. The schema will be restored along side the data as well. 
 The operator will match the new clusters nodes to backups from previous cluster based on the ordinal value of the pod assigned by its stateful set (e.g. old-cluster-0 will be restored to new-cluster-0). 
 You should always restore to a cluster with the same number of nodes as the original backup cluster. Restore currently works against just a single DC, if you backup using a broader set of lables, restore from that broader label group won't work.
+
+## Recreating a backup entry
+You may encounter situations where you have an existing backup in cloud blob store, but you don't have the corresponding backup CRD in Kubernetes. 
+An example of this situation may be where you want to restore a backup into a new Cassandra deployment taken from a Cassandra deployment running in a different Kubernetes cluster. 
+
+First you need to export the existing backup CRD from the original cluster (if you don't have access to it, you can recreate it by hand). 
+
+`kubectl  --kubeconfig=old-cluster get CassandraBackup backup-hostname -o yaml | tee backup.yaml`
+
+```yaml
+apiVersion: stable.instaclustr.com/v1
+kind: CassandraBackup
+metadata:
+  name: backup-hostname
+  labels:
+    cassandra-datacenter: foo-cassandra
+spec:
+  backupType: GCP_BLOB
+  target: ben-cassandra-operator
+  status: "COMPLETE"
+```
+
+Once you have exported the CassandraBackup CRD, you will need to import it into the new Kubernetes cluster.
+
+`kubectl --kubeconfig=new-cluster apply -f backup.yaml`
+
+You can now follow the restore steps from above using the imported backup CRD. You will need to ensure that your new cluster has sufficient permissions to access the backup.

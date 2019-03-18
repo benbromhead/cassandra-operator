@@ -92,6 +92,13 @@ public class BackupControllerService extends AbstractExecutionThreadService {
                     continue;
                 }
 
+                if (dataCenter.getSpec().getStatus().equals("PROCESSED")) {
+                    logger.info("The backup {} has either moved to the PROCESSED state or an has been imported in the PROCESSED state.", dataCenter.getMetadata().getName());
+
+                    continue;
+                }
+
+
                 // data center created or modified
                 try {
                     logger.info("Reconciling Backup.");
